@@ -1,0 +1,31 @@
+[package]
+name = "iced_sctk"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+iced_graphics = { version = "0.12.1" }
+iced_runtime = { version = "0.12.1", features = ["multi-window"] }
+iced_core = { version = "0.12.1" }
+iced_futures = "0.12.0"
+iced_renderer = { version = "0.12.1" }
+iced_style = "0.12.1"
+iced_wgpu = "0.12.1"
+smithay-clipboard = "0.7.1"
+sctk = { package = "smithay-client-toolkit", version = "0.19.1" }
+wayland-protocols = { version = "0.32.1", features = [ "staging"] }
+thiserror = "1.0.61"
+tracing = "0.1.40"
+wayland-backend = { version = "0.3.1", features = ["client_system"] }
+dnd = { git = "https://github.com/pop-os/window_clipboard.git", tag = "pop-dnd-6" }
+futures = "0.3.30"
+float-cmp = "0.9.0"
+itertools = "0.13.0"
+raw-window-handle = "0.6"
+window_clipboard = { git = "https://github.com/pop-os/window_clipboard.git", tag = "pop-dnd-6" }
+xkeysym = "0.2.1"
+xkbcommon = { version = "0.7.0", features = ["wayland"] } 
+xkbcommon-dl = "0.4.1"
+mime = { git = "https://github.com/pop-os/window_clipboard.git", tag = "pop-dnd-6" }
+
+
