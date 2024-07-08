@@ -206,11 +206,11 @@ where
     type Theme = A::Theme;
     type Renderer = iced_renderer::Renderer;
 
-    fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
+    fn update(&mut self, message: Self::Message) -> Command<A::Message> {
         self.0.update(message)
     }
 
-    fn view(&self, window: window::Id) -> Element<'_, Self::Message, Self::Theme, Self::Renderer> {
+    fn view(&self, window: window::Id) -> Element<'_, A::Message, A::Theme, Self::Renderer> {
         self.0.view(window)
     }
 }
@@ -239,7 +239,7 @@ where
         self.0.style()
     }
 
-    fn subscription(&self) -> Subscription<Self::Message> {
+    fn subscription(&self) -> Subscription<A::Message> {
         self.0.subscription()
     }
 

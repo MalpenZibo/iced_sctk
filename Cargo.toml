@@ -3,7 +3,13 @@ name = "iced_sctk"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+debug = ["iced_runtime/debug"]
+application = []
+clipboard = []
+
 [dependencies]
+iced = { version = "0.12.1", features = ["tokio", "multi-window", "advanced", "wgpu"] }
 iced_graphics = { version = "0.12.1" }
 iced_runtime = { version = "0.12.1", features = ["multi-window"] }
 iced_core = { version = "0.12.1" }

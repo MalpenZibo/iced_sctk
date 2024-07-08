@@ -5,26 +5,24 @@ use std::{
 };
 
 use crate::{
-    application::Event, command::wayland::{self, data_device::DataFromMimeType, layer_surface::{IcedMargin, IcedOutput, SctkLayerSurfaceSettings}, popup::SctkPopupSettings, window::SctkWindowSettings}, dpi::LogicalSize, handlers::{
-        wp_fractional_scaling::FractionalScalingManager,
-        wp_viewporter::ViewporterState,
-    }, sctk_event::{
-        LayerSurfaceEventVariant, PopupEventVariant, SctkEvent,
-        WindowEventVariant,
-    }
+    application::Event,
+    command::platform_specific::{
+        self,
+        wayland::{
+            data_device::DataFromMimeType,
+            layer_surface::{IcedMargin, IcedOutput, SctkLayerSurfaceSettings},
+            popup::SctkPopupSettings,
+            window::SctkWindowSettings,
+        },
+    },
+    dpi::LogicalSize,
+    handlers::{wp_fractional_scaling::FractionalScalingManager, wp_viewporter::ViewporterState},
+    sctk_event::{LayerSurfaceEventVariant, PopupEventVariant, SctkEvent, WindowEventVariant},
 };
 
-use iced_core::window;
+use iced_core::window::{self};
+
 use iced_runtime::{
-    // command::platform_specific::{
-    //     self,
-    //     wayland::{
-    //         data_device::DataFromMimeType,
-    //         layer_surface::{IcedMargin, IcedOutput, SctkLayerSurfaceSettings},
-    //         popup::SctkPopupSettings,
-    //         window::SctkWindowSettings,
-    //     },
-    // },
     core::{touch, Point},
     keyboard::Modifiers,
 };
@@ -32,8 +30,8 @@ use sctk::{
     activation::ActivationState,
     compositor::CompositorState,
     data_device_manager::{
-        data_device::DataDevice, data_offer::DragOffer,
-        data_source::DragSource, DataDeviceManagerState, WritePipe,
+        data_device::DataDevice, data_offer::DragOffer, data_source::DragSource,
+        DataDeviceManagerState, WritePipe,
     },
     error::GlobalError,
     output::OutputState,
@@ -60,13 +58,11 @@ use sctk::{
         SeatState,
     },
     session_lock::{
-        SessionLock, SessionLockState, SessionLockSurface,
-        SessionLockSurfaceConfigure,
+        SessionLock, SessionLockState, SessionLockSurface, SessionLockSurfaceConfigure,
     },
     shell::{
         wlr_layer::{
-            Anchor, KeyboardInteractivity, Layer, LayerShell, LayerSurface,
-            LayerSurfaceConfigure,
+            Anchor, KeyboardInteractivity, Layer, LayerShell, LayerSurface, LayerSurfaceConfigure,
         },
         xdg::{
             popup::{Popup, PopupConfigure},
@@ -108,23 +104,18 @@ pub struct SctkWindow<T> {
     pub(crate) last_configure: Option<WindowConfigure>,
     pub(crate) resizable: Option<f64>,
     /// Requests that SCTK window should perform.
-    pub(crate) _pending_requests:
-        Vec<wayland::window::Action<T>>,
+    pub(crate) _pending_requests: Vec<platform_specific::wayland::window::Action<T>>,
     pub(crate) wp_fractional_scale: Option<WpFractionalScaleV1>,
     pub(crate) wp_viewport: Option<WpViewport>,
 }
 
 impl<T> SctkWindow<T> {
     pub(crate) fn set_size(&mut self, logical_size: LogicalSize<NonZeroU32>) {
-        self.requested_size =
-            Some((logical_size.width.get(), logical_size.height.get()));
+        self.requested_size = Some((logical_size.width.get(), logical_size.height.get()));
         self.update_size(logical_size)
     }
 
-    pub(crate) fn update_size(
-        &mut self,
-        LogicalSize { width, height }: LogicalSize<NonZeroU32>,
-    ) {
+    pub(crate) fn update_size(&mut self, LogicalSize { width, height }: LogicalSize<NonZeroU32>) {
         self.window
             .set_window_geometry(0, 0, width.get(), height.get());
         self.current_size = Some((width, height));
@@ -148,8 +139,7 @@ pub struct SctkLayerSurface<T> {
     pub(crate) margin: IcedMargin,
     pub(crate) exclusive_zone: i32,
     pub(crate) last_configure: Option<LayerSurfaceConfigure>,
-    pub(crate) _pending_requests:
-        Vec<wayland::layer_surface::Action<T>>,
+    pub(crate) _pending_requests: Vec<platform_specific::wayland::layer_surface::Action<T>>,
     pub(crate) scale_factor: Option<f64>,
     pub(crate) wp_fractional_scale: Option<WpFractionalScaleV1>,
     pub(crate) wp_viewport: Option<WpViewport>,
@@ -182,9 +172,7 @@ pub enum SctkSurface {
 impl SctkSurface {
     pub fn wl_surface(&self) -> &WlSurface {
         match self {
-            SctkSurface::LayerSurface(s)
-            | SctkSurface::Window(s)
-            | SctkSurface::Popup(s) => s,
+            SctkSurface::LayerSurface(s) | SctkSurface::Window(s) | SctkSurface::Popup(s) => s,
         }
     }
 }
@@ -194,8 +182,7 @@ pub struct SctkPopup<T> {
     pub(crate) popup: Popup,
     pub(crate) last_configure: Option<PopupConfigure>,
     // pub(crate) positioner: XdgPositioner,
-    pub(crate) _pending_requests:
-        Vec<wayland::popup::Action<T>>,
+    pub(crate) _pending_requests: Vec<platform_specific::wayland::popup::Action<T>>,
     pub(crate) data: SctkPopupData,
     pub(crate) scale_factor: Option<f64>,
     pub(crate) wp_fractional_scale: Option<WpFractionalScaleV1>,
@@ -226,8 +213,7 @@ pub struct Dnd<T> {
     pub(crate) origin: WlSurface,
     pub(crate) source: Option<(DragSource, Box<dyn DataFromMimeType>)>,
     pub(crate) icon_surface: Option<(WlSurface, window::Id)>,
-    pub(crate) pending_requests:
-        Vec<wayland::data_device::Action<T>>,
+    pub(crate) pending_requests: Vec<platform_specific::wayland::data_device::Action<T>>,
     pub(crate) pipe: Option<WritePipe>,
     pub(crate) cur_write: Option<(Vec<u8>, usize, RegistrationToken)>,
 }
@@ -367,12 +353,7 @@ pub enum LayerSurfaceCreationError {
 pub enum DndStartError {}
 
 impl<T> SctkState<T> {
-    pub fn scale_factor_changed(
-        &mut self,
-        surface: &WlSurface,
-        scale_factor: f64,
-        legacy: bool,
-    ) {
+    pub fn scale_factor_changed(&mut self, surface: &WlSurface, scale_factor: f64, legacy: bool) {
         if let Some(window) = self
             .windows
             .iter_mut()
@@ -427,8 +408,7 @@ impl<T> SctkState<T> {
             }
             layer_surface.scale_factor = Some(scale_factor);
             if legacy {
-                let _ =
-                    layer_surface.surface.set_buffer_scale(scale_factor as u32);
+                let _ = layer_surface.surface.set_buffer_scale(scale_factor as u32);
             }
             self.compositor_updates.push(SctkEvent::LayerSurfaceEvent {
                 variant: LayerSurfaceEventVariant::ScaleFactorChanged(
@@ -450,35 +430,31 @@ where
     pub fn get_popup(
         &mut self,
         settings: SctkPopupSettings,
-    ) -> Result<(window::Id, WlSurface, WlSurface, WlSurface), PopupCreationError>
-    {
-        let (parent, toplevel) = if let Some(parent) =
-            self.layer_surfaces.iter().find(|l| l.id == settings.parent)
-        {
-            (
-                SctkSurface::LayerSurface(parent.surface.wl_surface().clone()),
-                parent.surface.wl_surface().clone(),
-            )
-        } else if let Some(parent) =
-            self.windows.iter().find(|w| w.id == settings.parent)
-        {
-            (
-                SctkSurface::Window(parent.window.wl_surface().clone()),
-                parent.window.wl_surface().clone(),
-            )
-        } else if let Some(i) = self
-            .popups
-            .iter()
-            .position(|p| p.data.id == settings.parent)
-        {
-            let parent = &self.popups[i];
-            (
-                SctkSurface::Popup(parent.popup.wl_surface().clone()),
-                parent.data.toplevel.clone(),
-            )
-        } else {
-            return Err(PopupCreationError::ParentMissing);
-        };
+    ) -> Result<(window::Id, WlSurface, WlSurface, WlSurface), PopupCreationError> {
+        let (parent, toplevel) =
+            if let Some(parent) = self.layer_surfaces.iter().find(|l| l.id == settings.parent) {
+                (
+                    SctkSurface::LayerSurface(parent.surface.wl_surface().clone()),
+                    parent.surface.wl_surface().clone(),
+                )
+            } else if let Some(parent) = self.windows.iter().find(|w| w.id == settings.parent) {
+                (
+                    SctkSurface::Window(parent.window.wl_surface().clone()),
+                    parent.window.wl_surface().clone(),
+                )
+            } else if let Some(i) = self
+                .popups
+                .iter()
+                .position(|p| p.data.id == settings.parent)
+            {
+                let parent = &self.popups[i];
+                (
+                    SctkSurface::Popup(parent.popup.wl_surface().clone()),
+                    parent.data.toplevel.clone(),
+                )
+            } else {
+                return Err(PopupCreationError::ParentMissing);
+            };
 
         let size = if settings.positioner.size.is_none() {
             return Err(PopupCreationError::SizeMissing);
@@ -495,17 +471,11 @@ where
             settings.positioner.anchor_rect.width,
             settings.positioner.anchor_rect.height,
         );
-        if let Ok(constraint_adjustment) =
-            settings.positioner.constraint_adjustment.try_into()
-        {
+        if let Ok(constraint_adjustment) = settings.positioner.constraint_adjustment.try_into() {
             positioner.set_constraint_adjustment(constraint_adjustment);
         }
-
         positioner.set_gravity(settings.positioner.gravity);
-        positioner.set_offset(
-            settings.positioner.offset.0,
-            settings.positioner.offset.1,
-        );
+        positioner.set_offset(settings.positioner.offset.0, settings.positioner.offset.1);
         if settings.positioner.reactive {
             positioner.set_reactive();
         }
@@ -513,10 +483,10 @@ where
 
         let grab = settings.grab;
 
-        let wl_surface =
-            self.compositor_state.create_surface(&self.queue_handle);
+        let wl_surface = self.compositor_state.create_surface(&self.queue_handle);
 
-        let (toplevel, popup) = match &parent {
+        let (toplevel, popup) =
+            match &parent {
                 SctkSurface::LayerSurface(parent) => {
                     let Some(parent_layer_surface) = self
                         .layer_surfaces

@@ -696,4 +696,3 @@ where
 
 delegate_noop!(@<T: 'static + Debug> SctkState<T>: ignore WpAlphaModifierV1);
 delegate_noop!(@<T: 'static + Debug> SctkState<T>: ignore WpAlphaModifierSurfaceV1);
-

@@ -34,11 +34,11 @@ mod clipboard {
     }
 
     impl iced_runtime::core::clipboard::Clipboard for Clipboard {
-        fn read(&self, kind: Kind) -> Option<String> {
+        fn read(&self, _: Kind) -> Option<String> {
             None
         }
 
-        fn write(&mut self, kind: Kind, _contents: String) {}
+        fn write(&mut self, _: Kind, _contents: String) {}
     }
 }
 

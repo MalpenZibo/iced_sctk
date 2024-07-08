@@ -74,9 +74,3 @@ impl<T> Debug for Action<T> {
         }
     }
 }
-
-impl<T: 'static> From<Action<T>> for iced_runtime::command::Action<T> {
-    fn from(value: Action<T>) -> Self {
-        iced_runtime::command::Action::Custom(Box::new(value))
-    }
-}

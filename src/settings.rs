@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::command::wayland::{
+use crate::command::platform_specific::wayland::{
     layer_surface::SctkLayerSurfaceSettings, window::SctkWindowSettings,
 };
 

@@ -1,11 +1,16 @@
 use crate::{
-    application::SurfaceIdWrapper, command::wayland::data_device::DndIcon, conversion::{
+    application::SurfaceIdWrapper, command::platform_specific::wayland::data_device::DndIcon, conversion::{
         modifiers_to_native, pointer_axis_to_native, pointer_button_to_native,
     }, dpi::PhysicalSize, keymap::{self, keysym_to_key}, subsurface_widget::SubsurfaceState
 };
 
+use iced_futures::core::event::{
+    // wayland::{LayerEvent, PopupEvent, SessionLockEvent},
+    // PlatformSpecific,
+};
 use iced_runtime::{
-    core::{ keyboard, mouse, touch, window, Point},
+    // command::platform_specific::wayland::data_device::DndIcon,
+    core::{/* event::wayland, */ keyboard, mouse, touch, window, Point},
     keyboard::{key, Key, Location},
 };
 use iced_core::window::Id as SurfaceId;
@@ -654,21 +659,22 @@ impl SctkEvent {
                     })
                     .into_iter()
                     .collect(),
-                // WindowEventVariant::WmCapabilities(caps) => surface_ids
-                //     .get(&surface.id())
-                //     .map(|id| id.inner())
-                //     .map(|id| {
-                //         iced_runtime::core::Event::PlatformSpecific(
-                //             PlatformSpecific::Wayland(wayland::Event::Window(
-                //                 wayland::WindowEvent::WmCapabilities(caps),
-                //                 surface,
-                //                 id,
-                //             )),
-                //         )
-                //     })
-                //     .into_iter()
-                //     .collect(),
-                WindowEventVariant::WmCapabilities(..) => Default::default(),
+                WindowEventVariant::WmCapabilities(caps) => 
+                    Default::default(),
+                    // surface_ids
+                    // .get(&surface.id())
+                    // .map(|id| id.inner())
+                    // .map(|id| {
+                    //     iced_runtime::core::Event::PlatformSpecific(
+                    //         PlatformSpecific::Wayland(wayland::Event::Window(
+                    //             wayland::WindowEvent::WmCapabilities(caps),
+                    //             surface,
+                    //             id,
+                    //         )),
+                    //     )
+                    // })
+                    // .into_iter()
+                    // .collect(),
                 WindowEventVariant::ConfigureBounds { .. } => {
                     Default::default()
                 }
@@ -696,38 +702,41 @@ impl SctkEvent {
                 WindowEventVariant::ScaleFactorChanged(..) => {
                     Default::default()
                 }
-                // WindowEventVariant::StateChanged(s) => surface_ids
-                //     .get(&surface.id())
-                //     .map(|id| {
-                //         iced_runtime::core::Event::PlatformSpecific(
-                //             PlatformSpecific::Wayland(wayland::Event::Window(
-                //                 wayland::WindowEvent::State(s),
-                //                 surface,
-                //                 id.inner(),
-                //             )),
-                //         )
-                //     })
-                //     .into_iter()
-                //     .collect(),
-                WindowEventVariant::StateChanged(..) => Default::default(),
+                WindowEventVariant::StateChanged(s) => 
+                    Default::default(),
+                    // surface_ids
+                    // .get(&surface.id())
+                    // .map(|id| {
+                    //     iced_runtime::core::Event::PlatformSpecific(
+                    //         PlatformSpecific::Wayland(wayland::Event::Window(
+                    //             wayland::WindowEvent::State(s),
+                    //             surface,
+                    //             id.inner(),
+                    //         )),
+                    //     )
+                    // })
+                    // .into_iter()
+                    // .collect(),
             },
             SctkEvent::LayerSurfaceEvent {
                 variant,
                 id: surface,
             } => match variant {
-                // LayerSurfaceEventVariant::Done => destroyed_surface_ids
-                //     .get(&surface.id())
-                //     .map(|id| {
-                //         iced_runtime::core::Event::PlatformSpecific(
-                //             PlatformSpecific::Wayland(wayland::Event::Layer(
-                //                 LayerEvent::Done,
-                //                 surface,
-                //                 id.inner(),
-                //             )),
-                //         )
-                //     })
-                //     .into_iter()
-                //     .collect(),
+                LayerSurfaceEventVariant::Done => 
+                    Default::default(),
+                    // destroyed_surface_ids
+                    // .get(&surface.id())
+                    // .map(|id| {
+                    //     iced_runtime::core::Event::PlatformSpecific(
+                    //         PlatformSpecific::Wayland(wayland::Event::Layer(
+                    //             LayerEvent::Done,
+                    //             surface,
+                    //             id.inner(),
+                    //         )),
+                    //     )
+                    // })
+                    // .into_iter()
+                    // .collect(),
                 _ => Default::default(),
             },
             SctkEvent::PopupEvent {
@@ -736,22 +745,23 @@ impl SctkEvent {
                 ..
             } => {
                 match variant {
-                    // PopupEventVariant::Done => destroyed_surface_ids
-                    //     .get(&surface.id())
-                    //     .map(|id| {
-                    //         iced_runtime::core::Event::PlatformSpecific(
-                    //             PlatformSpecific::Wayland(
-                    //                 wayland::Event::Popup(
-                    //                     PopupEvent::Done,
-                    //                     surface,
-                    //                     id.inner(),
-                    //                 ),
-                    //             ),
-                    //         )
-                    //     })
-                    //     .into_iter()
-                    //     .collect(),
-                    PopupEventVariant::Done => Default::default(),
+                    PopupEventVariant::Done => 
+                        Default::default(),
+                        // destroyed_surface_ids
+                        // .get(&surface.id())
+                        // .map(|id| {
+                        //     iced_runtime::core::Event::PlatformSpecific(
+                        //         PlatformSpecific::Wayland(
+                        //             wayland::Event::Popup(
+                        //                 PopupEvent::Done,
+                        //                 surface,
+                        //                 id.inner(),
+                        //             ),
+                        //         ),
+                        //     )
+                        // })
+                        // .into_iter()
+                        // .collect(),
                     PopupEventVariant::Created(_, _) => Default::default(), // TODO
                     PopupEventVariant::Configure(_, _, _) => Default::default(), // TODO
                     PopupEventVariant::RepositionionedPopup { token: _ } => {
@@ -770,9 +780,9 @@ impl SctkEvent {
                 //         id,
                 //     )),
                 // ))
-                None
-                .into_iter()
-                .collect()
+                // .into_iter()
+                // .collect()
+                Default::default()
             }
             SctkEvent::UpdateOutput { id, info } => {
                 // vec![iced_runtime::core::Event::PlatformSpecific(
@@ -790,9 +800,9 @@ impl SctkEvent {
                 //         id,
                 //     )),
                 // ))
-                None
-                .into_iter()
-                .collect()
+                // .into_iter()
+                // .collect()
+                Default::default()
             }
             SctkEvent::ScaleFactorChanged {
                 factor: _,
@@ -806,9 +816,9 @@ impl SctkEvent {
                     //         wayland::DndOfferEvent::Enter { mime_types, x, y },
                     //     )),
                     // ))
-                    None
-                    .into_iter()
-                    .collect()
+                    // .into_iter()
+                    // .collect()
+                    Default::default()
                 }
                 DndOfferEvent::Motion { x, y } => {
                     let offset = if let Some((x_offset, y_offset, _)) =
@@ -826,9 +836,9 @@ impl SctkEvent {
                     //         },
                     //     )),
                     // ))
-                    None
-                    .into_iter()
-                    .collect()
+                    // .into_iter()
+                    // .collect()
+                    Default::default()
                 }
                 DndOfferEvent::DropPerformed => {
                     // Some(iced_runtime::core::Event::PlatformSpecific(
@@ -836,9 +846,9 @@ impl SctkEvent {
                     //         wayland::DndOfferEvent::DropPerformed,
                     //     )),
                     // ))
-                    None
-                    .into_iter()
-                    .collect()
+                    // .into_iter()
+                    // .collect()
+                    Default::default()
                 }
                 DndOfferEvent::Leave => {
                     // Some(iced_runtime::core::Event::PlatformSpecific(
@@ -846,9 +856,9 @@ impl SctkEvent {
                     //         wayland::DndOfferEvent::Leave,
                     //     )),
                     // ))
-                    None
-                    .into_iter()
-                    .collect()
+                    // .into_iter()
+                    // .collect()
+                    Default::default()
                 }
                 DndOfferEvent::Data { mime_type, data } => {
                     // Some(iced_runtime::core::Event::PlatformSpecific(
@@ -856,9 +866,9 @@ impl SctkEvent {
                     //         wayland::DndOfferEvent::DndData { data, mime_type },
                     //     )),
                     // ))
-                    None
-                    .into_iter()
-                    .collect()
+                    // .into_iter()
+                    // .collect()
+                    Default::default()
                 }
                 DndOfferEvent::SourceActions(actions) => {
                     // Some(iced_runtime::core::Event::PlatformSpecific(
@@ -866,9 +876,9 @@ impl SctkEvent {
                     //         wayland::DndOfferEvent::SourceActions(actions),
                     //     )),
                     // ))
-                    None
-                    .into_iter()
-                    .collect()
+                    // .into_iter()
+                    // .collect()
+                    Default::default()
                 }
                 DndOfferEvent::SelectedAction(action) => {
                     // Some(iced_runtime::core::Event::PlatformSpecific(
@@ -876,9 +886,9 @@ impl SctkEvent {
                     //         wayland::DndOfferEvent::SelectedAction(action),
                     //     )),
                     // ))
-                    None
-                    .into_iter()
-                    .collect()
+                    // .into_iter()
+                    // .collect()
+                    Default::default()
                 }
             },
             SctkEvent::DataSource(event) => match event {
@@ -888,9 +898,9 @@ impl SctkEvent {
                     //         wayland::DataSourceEvent::DndDropPerformed,
                     //     )),
                     // ))
-                    None
-                    .into_iter()
-                    .collect()
+                    // .into_iter()
+                    // .collect()
+                    Default::default()
                 }
                 DataSourceEvent::DndFinished => {
                     // Some(iced_runtime::core::Event::PlatformSpecific(
@@ -898,9 +908,9 @@ impl SctkEvent {
                     //         wayland::DataSourceEvent::DndFinished,
                     //     )),
                     // ))
-                    None
-                    .into_iter()
-                    .collect()
+                    // .into_iter()
+                    // .collect()
+                    Default::default()
                 }
                 DataSourceEvent::DndCancelled => {
                     // Some(iced_runtime::core::Event::PlatformSpecific(
@@ -908,9 +918,9 @@ impl SctkEvent {
                     //         wayland::DataSourceEvent::Cancelled,
                     //     )),
                     // ))
-                    None
-                    .into_iter()
-                    .collect()
+                    // .into_iter()
+                    // .collect()
+                    Default::default()
                 }
                 DataSourceEvent::MimeAccepted(mime_type) => {
                     // Some(iced_runtime::core::Event::PlatformSpecific(
@@ -918,9 +928,9 @@ impl SctkEvent {
                     //         wayland::DataSourceEvent::MimeAccepted(mime_type),
                     //     )),
                     // ))
-                    None
-                    .into_iter()
-                    .collect()
+                    // .into_iter()
+                    // .collect()
+                    Default::default()
                 }
                 DataSourceEvent::DndActionAccepted(action) => {
                     // Some(iced_runtime::core::Event::PlatformSpecific(
@@ -928,9 +938,9 @@ impl SctkEvent {
                     //         wayland::DataSourceEvent::DndActionAccepted(action),
                     //     )),
                     // ))
-                    None
-                    .into_iter()
-                    .collect()
+                    // .into_iter()
+                    // .collect()
+                    Default::default()
                 }
                 DataSourceEvent::SendDndData { mime_type } => {
                     // Some(iced_runtime::core::Event::PlatformSpecific(
@@ -938,9 +948,9 @@ impl SctkEvent {
                     //         wayland::DataSourceEvent::SendDndData(mime_type),
                     //     )),
                     // ))
-                    None
-                    .into_iter()
-                    .collect()
+                    // .into_iter()
+                    // .collect()
+                    Default::default()
                 }
                 DataSourceEvent::SendSelectionData { mime_type } => {
                     // Some(iced_runtime::core::Event::PlatformSpecific(
@@ -950,9 +960,9 @@ impl SctkEvent {
                     //         ),
                     //     )),
                     // ))
-                    None
-                    .into_iter()
-                    .collect()
+                    // .into_iter()
+                    // .collect()
+                    Default::default()
                 }
             },
             SctkEvent::SessionLocked => {
@@ -961,9 +971,9 @@ impl SctkEvent {
                 //         wayland::SessionLockEvent::Locked,
                 //     )),
                 // ))
-                None
-                .into_iter()
-                .collect()
+                // .into_iter()
+                // .collect()
+                Default::default()
             }
             SctkEvent::SessionLockFinished => {
                 // Some(iced_runtime::core::Event::PlatformSpecific(
@@ -971,9 +981,9 @@ impl SctkEvent {
                 //         wayland::SessionLockEvent::Finished,
                 //     )),
                 // ))
-                None
-                .into_iter()
-                .collect()
+                // .into_iter()
+                // .collect()
+                Default::default()
             }
             SctkEvent::SessionLockSurfaceCreated { .. } => vec![],
             SctkEvent::SessionLockSurfaceConfigure { .. } => vec![],
@@ -984,9 +994,9 @@ impl SctkEvent {
                 //         wayland::SessionLockEvent::Unlocked,
                 //     )),
                 // ))
-                None
-                .into_iter()
-                .collect()
+                // .into_iter()
+                // .collect()
+                Default::default()
             }
         }
     }

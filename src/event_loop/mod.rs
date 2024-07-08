@@ -8,31 +8,29 @@ pub mod state;
 use crate::application::SurfaceIdWrapper;
 use crate::{
     application::Event,
-    command::wayland::{
-        self, data_device::DndIcon, layer_surface::SctkLayerSurfaceSettings,
-        window::SctkWindowSettings,
-    },
     conversion,
     dpi::LogicalSize,
     handlers::{
-        activation::IcedRequestData, wp_fractional_scaling::FractionalScalingManager,
+        activation::IcedRequestData,
+        wp_fractional_scaling::FractionalScalingManager,
         wp_viewporter::ViewporterState,
     },
     sctk_event::{
-        DataSourceEvent, DndOfferEvent, IcedSctkEvent, LayerSurfaceEventVariant, PopupEventVariant,
-        SctkEvent, StartCause, WindowEventVariant,
+        DataSourceEvent, DndOfferEvent, IcedSctkEvent,
+        LayerSurfaceEventVariant, PopupEventVariant, SctkEvent, StartCause,
+        WindowEventVariant,
     },
     settings,
     subsurface_widget::SubsurfaceState,
 };
 use iced_futures::core::window::Mode;
-// use iced_runtime::command::platform_specific::{
-//     self,
-//     wayland::{
-//         data_device::DndIcon, layer_surface::SctkLayerSurfaceSettings,
-//         window::SctkWindowSettings,
-//     },
-// };
+use crate::command::platform_specific::{
+    self,
+    wayland::{
+        data_device::DndIcon, layer_surface::SctkLayerSurfaceSettings,
+        window::SctkWindowSettings,
+    },
+};
 use sctk::{
     activation::{ActivationState, RequestData},
     compositor::CompositorState,
@@ -42,8 +40,8 @@ use sctk::{
     reexports::{
         calloop::{self, EventLoop, PostAction},
         client::{
-            globals::registry_queue_init, protocol::wl_surface::WlSurface, ConnectError,
-            Connection, DispatchError, Proxy,
+            globals::registry_queue_init, protocol::wl_surface::WlSurface,
+            ConnectError, Connection, DispatchError, Proxy,
         },
     },
     registry::RegistryState,
@@ -53,9 +51,9 @@ use sctk::{
     shm::Shm,
 };
 use sctk::{
-    data_device_manager::data_source::DragSource, reexports::calloop_wayland_source::WaylandSource,
+    data_device_manager::data_source::DragSource,
+    reexports::calloop_wayland_source::WaylandSource,
 };
-use wayland_protocols::wp::alpha_modifier::v1::client::wp_alpha_modifier_v1::WpAlphaModifierV1;
 #[cfg(feature = "a11y")]
 use std::sync::{Arc, Mutex};
 use std::{
@@ -99,7 +97,9 @@ impl<T> SctkEventLoop<T>
 where
     T: 'static + Debug,
 {
-    pub(crate) fn new<F: Sized>(_settings: &settings::Settings<F>) -> Result<Self, ConnectError> {
+    pub(crate) fn new<F: Sized>(
+        _settings: &settings::Settings<F>,
+    ) -> Result<Self, ConnectError> {
         let connection = Connection::connect_to_env()?;
         let _display = connection.display();
         let (globals, event_queue) = registry_queue_init(&connection).unwrap();
@@ -118,7 +118,8 @@ where
                 // shim::handle_window_requests(state);
             })
             .unwrap();
-        let (user_events_sender, user_events_channel) = calloop::channel::channel();
+        let (user_events_sender, user_events_channel) =
+            calloop::channel::channel();
 
         loop_handle
             .insert_source(user_events_channel, |event, _, state| match event {
@@ -128,12 +129,13 @@ where
                 calloop::channel::Event::Closed => {}
             })
             .unwrap();
-        let wayland_source = WaylandSource::new(connection.clone(), event_queue);
+        let wayland_source =
+            WaylandSource::new(connection.clone(), event_queue);
 
-        let wayland_dispatcher =
-            calloop::Dispatcher::new(wayland_source, |_, queue, winit_state| {
-                queue.dispatch_pending(winit_state)
-            });
+        let wayland_dispatcher = calloop::Dispatcher::new(
+            wayland_source,
+            |_, queue, winit_state| queue.dispatch_pending(winit_state),
+        );
 
         let _wayland_source_dispatcher = event_loop
             .handle()
@@ -143,17 +145,24 @@ where
         let (viewporter_state, fractional_scaling_manager) =
             match FractionalScalingManager::new(&globals, &qh) {
                 Ok(m) => {
-                    let viewporter_state = match ViewporterState::new(&globals, &qh) {
-                        Ok(s) => Some(s),
-                        Err(e) => {
-                            error!("Failed to initialize viewporter: {}", e);
-                            None
-                        }
-                    };
+                    let viewporter_state =
+                        match ViewporterState::new(&globals, &qh) {
+                            Ok(s) => Some(s),
+                            Err(e) => {
+                                error!(
+                                    "Failed to initialize viewporter: {}",
+                                    e
+                                );
+                                None
+                            }
+                        };
                     (viewporter_state, Some(m))
                 }
                 Err(e) => {
-                    error!("Failed to initialize fractional scaling manager: {}", e);
+                    error!(
+                        "Failed to initialize fractional scaling manager: {}",
+                        e
+                    );
                     (None, None)
                 }
             };
@@ -168,11 +177,15 @@ where
                 output_state: OutputState::new(&globals, &qh),
                 compositor_state: CompositorState::bind(&globals, &qh)
                     .expect("wl_compositor is not available"),
-                shm_state: Shm::bind(&globals, &qh).expect("wl_shm is not available"),
-                xdg_shell_state: XdgShell::bind(&globals, &qh).expect("xdg shell is not available"),
+                shm_state: Shm::bind(&globals, &qh)
+                    .expect("wl_shm is not available"),
+                xdg_shell_state: XdgShell::bind(&globals, &qh)
+                    .expect("xdg shell is not available"),
                 layer_shell: LayerShell::bind(&globals, &qh).ok(),
-                data_device_manager_state: DataDeviceManagerState::bind(&globals, &qh)
-                    .expect("data device manager is not available"),
+                data_device_manager_state: DataDeviceManagerState::bind(
+                    &globals, &qh,
+                )
+                .expect("data device manager is not available"),
                 activation_state: ActivationState::bind(&globals, &qh).ok(),
                 session_lock_state: SessionLockState::new(&globals, &qh),
                 session_lock: None,
@@ -216,7 +229,8 @@ where
     pub fn get_layer_surface(
         &mut self,
         layer_surface: SctkLayerSurfaceSettings,
-    ) -> Result<(iced_core::window::Id, WlSurface), LayerSurfaceCreationError> {
+    ) -> Result<(iced_core::window::Id, WlSurface), LayerSurfaceCreationError>
+    {
         self.state.get_layer_surface(layer_surface)
     }
 
@@ -237,7 +251,9 @@ where
         _role: iced_accessibility::accesskit::Role,
     ) -> adapter::IcedSctkAdapter {
         use iced_accessibility::{
-            accesskit::{NodeBuilder, NodeClassSet, NodeId, Role, Tree, TreeUpdate},
+            accesskit::{
+                NodeBuilder, NodeClassSet, NodeId, Role, Tree, TreeUpdate,
+            },
             accesskit_unix::Adapter,
             window_node_id,
         };
@@ -289,14 +305,16 @@ where
             .registry_state
             .bind_one(&self.state.queue_handle, 1..=6, GlobalData)
             .unwrap();
-        let wl_subcompositor =
-            self.state
-                .registry_state
-                .bind_one(&self.state.queue_handle, 1..=1, GlobalData);
-        let wp_viewporter =
-            self.state
-                .registry_state
-                .bind_one(&self.state.queue_handle, 1..=1, GlobalData);
+        let wl_subcompositor = self.state.registry_state.bind_one(
+            &self.state.queue_handle,
+            1..=1,
+            GlobalData,
+        );
+        let wp_viewporter = self.state.registry_state.bind_one(
+            &self.state.queue_handle,
+            1..=1,
+            GlobalData,
+        );
         let wl_shm = self
             .state
             .registry_state
@@ -330,7 +348,9 @@ where
                     &mut control_flow,
                 );
             } else {
-                tracing::warn!("No `wp_viewporter`. Subsurfaces not supported.");
+                tracing::warn!(
+                    "No `wp_viewporter`. Subsurfaces not supported."
+                );
             }
         } else {
             tracing::warn!("No `wl_subcompositor`. Subsurfaces not supported.");
@@ -367,7 +387,8 @@ where
             // woken up by messages arriving from the Wayland socket, to avoid delaying the
             // dispatch of these events until we're woken up again.
             let instant_wakeup = {
-                let mut wayland_source = self.wayland_dispatcher.as_source_mut();
+                let mut wayland_source =
+                    self.wayland_dispatcher.as_source_mut();
                 let queue = wayland_source.queue();
                 match queue.dispatch_pending(&mut self.state) {
                     Ok(dispatched) => dispatched > 0,
@@ -390,7 +411,9 @@ where
                 ControlFlow::Poll => {
                     // Non-blocking dispatch.
                     let timeout = Duration::from_millis(0);
-                    if let Err(error) = self.event_loop.dispatch(Some(timeout), &mut self.state) {
+                    if let Err(error) =
+                        self.event_loop.dispatch(Some(timeout), &mut self.state)
+                    {
                         break raw_os_err(error);
                     }
 
@@ -407,7 +430,9 @@ where
                         None
                     };
 
-                    if let Err(error) = self.event_loop.dispatch(timeout, &mut self.state) {
+                    if let Err(error) =
+                        self.event_loop.dispatch(timeout, &mut self.state)
+                    {
                         break raw_os_err(error);
                     }
 
@@ -430,7 +455,10 @@ where
                         Duration::from_millis(0)
                     };
 
-                    if let Err(error) = self.event_loop.dispatch(Some(duration), &mut self.state) {
+                    if let Err(error) = self
+                        .event_loop
+                        .dispatch(Some(duration), &mut self.state)
+                    {
                         break raw_os_err(error);
                     }
 
@@ -438,19 +466,23 @@ where
 
                     if now < deadline {
                         callback(
-                            IcedSctkEvent::NewEvents(StartCause::WaitCancelled {
-                                start,
-                                requested_resume: Some(deadline),
-                            }),
+                            IcedSctkEvent::NewEvents(
+                                StartCause::WaitCancelled {
+                                    start,
+                                    requested_resume: Some(deadline),
+                                },
+                            ),
                             &self.state,
                             &mut control_flow,
                         )
                     } else {
                         callback(
-                            IcedSctkEvent::NewEvents(StartCause::ResumeTimeReached {
-                                start,
-                                requested_resume: deadline,
-                            }),
+                            IcedSctkEvent::NewEvents(
+                                StartCause::ResumeTimeReached {
+                                    start,
+                                    requested_resume: deadline,
+                                },
+                            ),
                             &self.state,
                             &mut control_flow,
                         )
@@ -467,7 +499,8 @@ where
             for event in compositor_event_back_buffer.drain(..) {
                 let forward_event = match &event {
                     SctkEvent::LayerSurfaceEvent {
-                        variant: LayerSurfaceEventVariant::ScaleFactorChanged(..),
+                        variant:
+                            LayerSurfaceEventVariant::ScaleFactorChanged(..),
                         ..
                     }
                     | SctkEvent::PopupEvent {
@@ -480,7 +513,10 @@ where
                     } => true,
                     // ignore other events that shouldn't be in this buffer
                     event => {
-                        tracing::warn!("Unhandled compositor event: {:?}", event);
+                        tracing::warn!(
+                            "Unhandled compositor event: {:?}",
+                            event
+                        );
                         false
                     }
                 };
@@ -494,7 +530,10 @@ where
                 }
             }
 
-            std::mem::swap(&mut frame_event_back_buffer, &mut self.state.frame_events);
+            std::mem::swap(
+                &mut frame_event_back_buffer,
+                &mut self.state.frame_events,
+            );
 
             for event in frame_event_back_buffer.drain(..) {
                 sticky_exit_callback(
@@ -524,12 +563,14 @@ where
                             &mut control_flow,
                             &mut callback,
                         ),
-                        adapter::A11yWrapper::Event(event) => sticky_exit_callback(
-                            IcedSctkEvent::A11yEvent(event),
-                            &self.state,
-                            &mut control_flow,
-                            &mut callback,
-                        ),
+                        adapter::A11yWrapper::Event(event) => {
+                            sticky_exit_callback(
+                                IcedSctkEvent::A11yEvent(event),
+                                &self.state,
+                                &mut control_flow,
+                                &mut callback,
+                            )
+                        }
                     }
                 }
             }
@@ -551,12 +592,14 @@ where
                             Some(p) => {
                                 let _p = self.state.popups.remove(p);
                                 sticky_exit_callback(
-                                    IcedSctkEvent::SctkEvent(SctkEvent::PopupEvent {
-                                        variant: PopupEventVariant::Done,
-                                        toplevel_id,
-                                        parent_id,
-                                        id,
-                                    }),
+                                    IcedSctkEvent::SctkEvent(
+                                        SctkEvent::PopupEvent {
+                                            variant: PopupEventVariant::Done,
+                                            toplevel_id,
+                                            parent_id,
+                                            id,
+                                        },
+                                    ),
                                     &self.state,
                                     &mut control_flow,
                                     &mut callback,
@@ -569,18 +612,19 @@ where
                         variant: LayerSurfaceEventVariant::Done,
                         id,
                     } => {
-                        if let Some(i) = self
-                            .state
-                            .layer_surfaces
-                            .iter()
-                            .position(|l| l.surface.wl_surface().id() == id.id())
+                        if let Some(i) =
+                            self.state.layer_surfaces.iter().position(|l| {
+                                l.surface.wl_surface().id() == id.id()
+                            })
                         {
                             let _l = self.state.layer_surfaces.remove(i);
                             sticky_exit_callback(
-                                IcedSctkEvent::SctkEvent(SctkEvent::LayerSurfaceEvent {
-                                    variant: LayerSurfaceEventVariant::Done,
-                                    id,
-                                }),
+                                IcedSctkEvent::SctkEvent(
+                                    SctkEvent::LayerSurfaceEvent {
+                                        variant: LayerSurfaceEventVariant::Done,
+                                        id,
+                                    },
+                                ),
                                 &self.state,
                                 &mut control_flow,
                                 &mut callback,
@@ -591,19 +635,20 @@ where
                         variant: WindowEventVariant::Close,
                         id,
                     } => {
-                        if let Some(i) = self
-                            .state
-                            .windows
-                            .iter()
-                            .position(|l| l.window.wl_surface().id() == id.id())
+                        if let Some(i) =
+                            self.state.windows.iter().position(|l| {
+                                l.window.wl_surface().id() == id.id()
+                            })
                         {
                             let w = self.state.windows.remove(i);
                             w.window.xdg_toplevel().destroy();
                             sticky_exit_callback(
-                                IcedSctkEvent::SctkEvent(SctkEvent::WindowEvent {
-                                    variant: WindowEventVariant::Close,
-                                    id,
-                                }),
+                                IcedSctkEvent::SctkEvent(
+                                    SctkEvent::WindowEvent {
+                                        variant: WindowEventVariant::Close,
+                                        id,
+                                    },
+                                ),
                                 &self.state,
                                 &mut control_flow,
                                 &mut callback,
@@ -627,7 +672,8 @@ where
                 .partition(|e| matches!(e, Event::SctkEvent(_)));
             let mut to_commit = HashMap::new();
             let mut pending_redraws = Vec::new();
-            for event in sctk_events.into_iter().chain(user_events.into_iter()) {
+            for event in sctk_events.into_iter().chain(user_events.into_iter())
+            {
                 match event {
                     Event::Message(m) => {
                         sticky_exit_callback(
@@ -637,24 +683,31 @@ where
                             &mut callback,
                         );
                     }
-                    Event::SctkEvent(event) => match event {
-                        IcedSctkEvent::RedrawRequested(id) => {
-                            pending_redraws.push(id);
+                    Event::SctkEvent(event) => {
+                        match event {
+                            IcedSctkEvent::RedrawRequested(id) => {
+                                pending_redraws.push(id);
+                            },
+                            e => sticky_exit_callback(
+                                e,
+                                &self.state,
+                                &mut control_flow,
+                                &mut callback,
+                            ),
                         }
-                        e => sticky_exit_callback(e, &self.state, &mut control_flow, &mut callback),
-                    },
+                    }
                     Event::LayerSurface(action) => match action {
-                        wayland::layer_surface::Action::LayerSurface { builder, _phantom } => {
+                        platform_specific::wayland::layer_surface::Action::LayerSurface {
+                            builder,
+                            _phantom,
+                        } => {
                             // TODO ASHLEY: error handling
                             if let Ok((id, wl_surface)) = self.state.get_layer_surface(builder) {
                                 let object_id = wl_surface.id();
                                 // TODO Ashley: all surfaces should probably have an optional title for a11y if nothing else
                                 sticky_exit_callback(
                                     IcedSctkEvent::SctkEvent(SctkEvent::LayerSurfaceEvent {
-                                        variant: LayerSurfaceEventVariant::Created(
-                                            object_id.clone(),
-                                            id,
-                                        ),
+                                        variant: LayerSurfaceEventVariant::Created(object_id.clone(), id),
                                         id: wl_surface.clone(),
                                     }),
                                     &self.state,
@@ -663,18 +716,10 @@ where
                                 );
                                 #[cfg(feature = "a11y")]
                                 {
-                                    let adapter = self.init_a11y_adapter(
-                                        &wl_surface,
-                                        None,
-                                        None,
-                                        iced_accessibility::accesskit::Role::Window,
-                                    );
+                                    let adapter = self.init_a11y_adapter(&wl_surface, None, None, iced_accessibility::accesskit::Role::Window);
 
                                     sticky_exit_callback(
-                                        IcedSctkEvent::A11ySurfaceCreated(
-                                            SurfaceIdWrapper::LayerSurface(id),
-                                            adapter,
-                                        ),
+                                        IcedSctkEvent::A11ySurfaceCreated(SurfaceIdWrapper::LayerSurface(id), adapter),
                                         &self.state,
                                         &mut control_flow,
                                         &mut callback,
@@ -682,41 +727,29 @@ where
                                 }
                             }
                         }
-                        wayland::layer_surface::Action::Size { id, width, height } => {
-                            if let Some(layer_surface) =
-                                self.state.layer_surfaces.iter_mut().find(|l| l.id == id)
-                            {
+                        platform_specific::wayland::layer_surface::Action::Size {
+                            id,
+                            width,
+                            height,
+                        } => {
+                            if let Some(layer_surface) = self.state.layer_surfaces.iter_mut().find(|l| l.id == id) {
                                 layer_surface.set_size(width, height);
                                 pending_redraws.push(layer_surface.surface.wl_surface().id());
-                                let wl_surface = layer_surface.surface.wl_surface();
+                                    let wl_surface = layer_surface.surface.wl_surface();
 
-                                if let Some(mut prev_configure) =
-                                    layer_surface.last_configure.clone()
-                                {
-                                    prev_configure.new_size = (
-                                        width.unwrap_or(prev_configure.new_size.0),
-                                        width.unwrap_or(prev_configure.new_size.1),
-                                    );
+                                if let Some(mut prev_configure) = layer_surface.last_configure.clone() {
+                                    prev_configure.new_size = (width.unwrap_or(prev_configure.new_size.0), width.unwrap_or(prev_configure.new_size.1));
                                     sticky_exit_callback(
-                                        IcedSctkEvent::SctkEvent(SctkEvent::LayerSurfaceEvent {
-                                            variant: LayerSurfaceEventVariant::Configure(
-                                                prev_configure,
-                                                wl_surface.clone(),
-                                                false,
-                                            ),
-                                            id: wl_surface.clone(),
-                                        }),
+                                        IcedSctkEvent::SctkEvent(SctkEvent::LayerSurfaceEvent { variant: LayerSurfaceEventVariant::Configure(prev_configure, wl_surface.clone(), false), id: wl_surface.clone()}),
                                         &self.state,
                                         &mut control_flow,
                                         &mut callback,
                                     );
                                 }
                             }
-                        }
-                        wayland::layer_surface::Action::Destroy(id) => {
-                            if let Some(i) =
-                                self.state.layer_surfaces.iter().position(|l| l.id == id)
-                            {
+                        },
+                        platform_specific::wayland::layer_surface::Action::Destroy(id) => {
+                            if let Some(i) = self.state.layer_surfaces.iter().position(|l| l.id == id) {
                                 let l = self.state.layer_surfaces.remove(i);
                                 sticky_exit_callback(
                                     IcedSctkEvent::SctkEvent(SctkEvent::LayerSurfaceEvent {
@@ -728,74 +761,61 @@ where
                                     &mut callback,
                                 );
                             }
-                        }
-                        wayland::layer_surface::Action::Anchor { id, anchor } => {
-                            if let Some(layer_surface) =
-                                self.state.layer_surfaces.iter_mut().find(|l| l.id == id)
-                            {
+                        },
+                        platform_specific::wayland::layer_surface::Action::Anchor { id, anchor } => {
+                            if let Some(layer_surface) = self.state.layer_surfaces.iter_mut().find(|l| l.id == id) {
                                 layer_surface.anchor = anchor;
                                 layer_surface.surface.set_anchor(anchor);
                                 to_commit.insert(id, layer_surface.surface.wl_surface().clone());
+
                             }
                         }
-                        wayland::layer_surface::Action::ExclusiveZone { id, exclusive_zone } => {
-                            if let Some(layer_surface) =
-                                self.state.layer_surfaces.iter_mut().find(|l| l.id == id)
-                            {
+                        platform_specific::wayland::layer_surface::Action::ExclusiveZone {
+                            id,
+                            exclusive_zone,
+                        } => {
+                            if let Some(layer_surface) = self.state.layer_surfaces.iter_mut().find(|l| l.id == id) {
                                 layer_surface.exclusive_zone = exclusive_zone;
                                 layer_surface.surface.set_exclusive_zone(exclusive_zone);
                                 to_commit.insert(id, layer_surface.surface.wl_surface().clone());
                             }
-                        }
-                        wayland::layer_surface::Action::Margin { id, margin } => {
-                            if let Some(layer_surface) =
-                                self.state.layer_surfaces.iter_mut().find(|l| l.id == id)
-                            {
-                                layer_surface.margin = margin;
-                                layer_surface.surface.set_margin(
-                                    margin.top,
-                                    margin.right,
-                                    margin.bottom,
-                                    margin.left,
-                                );
-                                to_commit.insert(id, layer_surface.surface.wl_surface().clone());
-                            }
-                        }
-                        wayland::layer_surface::Action::KeyboardInteractivity {
+                        },
+                        platform_specific::wayland::layer_surface::Action::Margin {
                             id,
-                            keyboard_interactivity,
+                            margin,
                         } => {
-                            if let Some(layer_surface) =
-                                self.state.layer_surfaces.iter_mut().find(|l| l.id == id)
-                            {
-                                layer_surface.keyboard_interactivity = keyboard_interactivity;
-                                layer_surface
-                                    .surface
-                                    .set_keyboard_interactivity(keyboard_interactivity);
+                            if let Some(layer_surface) = self.state.layer_surfaces.iter_mut().find(|l| l.id == id) {
+                                layer_surface.margin = margin;
+                                layer_surface.surface.set_margin(margin.top, margin.right, margin.bottom, margin.left);
                                 to_commit.insert(id, layer_surface.surface.wl_surface().clone());
                             }
-                        }
-                        wayland::layer_surface::Action::Layer { id, layer } => {
-                            if let Some(layer_surface) =
-                                self.state.layer_surfaces.iter_mut().find(|l| l.id == id)
-                            {
+                        },
+                        platform_specific::wayland::layer_surface::Action::KeyboardInteractivity { id, keyboard_interactivity } => {
+                            if let Some(layer_surface) = self.state.layer_surfaces.iter_mut().find(|l| l.id == id) {
+                                layer_surface.keyboard_interactivity = keyboard_interactivity;
+                                layer_surface.surface.set_keyboard_interactivity(keyboard_interactivity);
+                                to_commit.insert(id, layer_surface.surface.wl_surface().clone());
+
+                            }
+                        },
+                        platform_specific::wayland::layer_surface::Action::Layer { id, layer } => {
+                            if let Some(layer_surface) = self.state.layer_surfaces.iter_mut().find(|l| l.id == id) {
                                 layer_surface.layer = layer;
                                 layer_surface.surface.set_layer(layer);
                                 to_commit.insert(id, layer_surface.surface.wl_surface().clone());
+
                             }
-                        }
+                        },
                     },
                     Event::SetCursor(iced_icon) => {
                         if let Some(ptr) = self.state.seats.get(0).and_then(|s| s.ptr.as_ref()) {
                             let icon = conversion::cursor_icon(iced_icon);
-                            let _ = ptr.set_cursor(
-                                self.wayland_dispatcher.as_source_ref().connection(),
-                                icon,
-                            );
+                            let _ = ptr.set_cursor(self.wayland_dispatcher.as_source_ref().connection(), icon);
                         }
+
                     }
                     Event::Window(action) => match action {
-                        wayland::window::Action::Window { builder, _phantom } => {
+                        platform_specific::wayland::window::Action::Window { builder, _phantom } => {
                             #[cfg(feature = "a11y")]
                             let app_id = builder.app_id.clone();
                             #[cfg(feature = "a11y")]
@@ -805,8 +825,7 @@ where
                             sticky_exit_callback(
                                 IcedSctkEvent::SctkEvent(SctkEvent::WindowEvent {
                                     variant: WindowEventVariant::Created(object_id.clone(), id),
-                                    id: wl_surface.clone(),
-                                }),
+                                    id: wl_surface.clone() }),
                                 &self.state,
                                 &mut control_flow,
                                 &mut callback,
@@ -814,140 +833,100 @@ where
 
                             #[cfg(feature = "a11y")]
                             {
-                                let adapter = self.init_a11y_adapter(
-                                    &wl_surface,
-                                    app_id,
-                                    title,
-                                    iced_accessibility::accesskit::Role::Window,
-                                );
+                                let adapter = self.init_a11y_adapter(&wl_surface, app_id, title, iced_accessibility::accesskit::Role::Window);
 
                                 sticky_exit_callback(
-                                    IcedSctkEvent::A11ySurfaceCreated(
-                                        SurfaceIdWrapper::Window(id),
-                                        adapter,
-                                    ),
+                                    IcedSctkEvent::A11ySurfaceCreated(SurfaceIdWrapper::Window(id), adapter),
                                     &self.state,
                                     &mut control_flow,
                                     &mut callback,
                                 );
                             }
-                        }
-                        wayland::window::Action::Size { id, width, height } => {
-                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id)
-                            {
-                                window.set_size(LogicalSize::new(
-                                    NonZeroU32::new(width).unwrap_or(NonZeroU32::new(1).unwrap()),
-                                    NonZeroU32::new(1).unwrap(),
-                                ));
+                        },
+                        platform_specific::wayland::window::Action::Size { id, width, height } => {
+                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id) {
+                                window.set_size(LogicalSize::new(NonZeroU32::new(width).unwrap_or(NonZeroU32::new(1).unwrap()), NonZeroU32::new(1).unwrap()));
                                 // TODO Ashley maybe don't force window size?
                                 pending_redraws.push(window.window.wl_surface().id());
 
                                 if let Some(mut prev_configure) = window.last_configure.clone() {
                                     let (width, height) = (
-                                        NonZeroU32::new(width)
-                                            .unwrap_or(NonZeroU32::new(1).unwrap()),
-                                        NonZeroU32::new(height)
-                                            .unwrap_or(NonZeroU32::new(1).unwrap()),
+                                        NonZeroU32::new(width).unwrap_or(NonZeroU32::new(1).unwrap()),
+                                        NonZeroU32::new(height).unwrap_or(NonZeroU32::new(1).unwrap()),
                                     );
                                     prev_configure.new_size = (Some(width), Some(height));
                                     sticky_exit_callback(
-                                        IcedSctkEvent::SctkEvent(SctkEvent::WindowEvent {
-                                            variant: WindowEventVariant::Configure(
-                                                prev_configure,
-                                                window.window.wl_surface().clone(),
-                                                false,
-                                            ),
-                                            id: window.window.wl_surface().clone(),
-                                        }),
+                                        IcedSctkEvent::SctkEvent(SctkEvent::WindowEvent { variant: WindowEventVariant::Configure(prev_configure, window.window.wl_surface().clone(), false), id: window.window.wl_surface().clone()}),
                                         &self.state,
                                         &mut control_flow,
                                         &mut callback,
                                     );
                                 }
                             }
-                        }
-                        wayland::window::Action::MinSize { id, size } => {
-                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id)
-                            {
+                        },
+                        platform_specific::wayland::window::Action::MinSize { id, size } => {
+                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id) {
                                 window.window.set_min_size(size);
                                 to_commit.insert(id, window.window.wl_surface().clone());
                             }
-                        }
-                        wayland::window::Action::MaxSize { id, size } => {
-                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id)
-                            {
+                        },
+                        platform_specific::wayland::window::Action::MaxSize { id, size } => {
+                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id) {
                                 window.window.set_max_size(size);
                                 to_commit.insert(id, window.window.wl_surface().clone());
                             }
-                        }
-                        wayland::window::Action::Title { id, title } => {
-                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id)
-                            {
+                        },
+                        platform_specific::wayland::window::Action::Title { id, title } => {
+                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id) {
                                 window.window.set_title(title);
                                 to_commit.insert(id, window.window.wl_surface().clone());
                             }
-                        }
-                        wayland::window::Action::Minimize { id } => {
-                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id)
-                            {
+                        },
+                        platform_specific::wayland::window::Action::Minimize { id } => {
+                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id) {
                                 window.window.set_minimized();
                                 to_commit.insert(id, window.window.wl_surface().clone());
                             }
-                        }
-                        wayland::window::Action::Maximize { id } => {
-                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id)
-                            {
+                        },
+                        platform_specific::wayland::window::Action::Maximize { id } => {
+                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id) {
                                 window.window.set_maximized();
                                 to_commit.insert(id, window.window.wl_surface().clone());
                             }
-                        }
-                        wayland::window::Action::UnsetMaximize { id } => {
-                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id)
-                            {
+                        },
+                        platform_specific::wayland::window::Action::UnsetMaximize { id } => {
+                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id) {
                                 window.window.unset_maximized();
                                 to_commit.insert(id, window.window.wl_surface().clone());
                             }
-                        }
-                        wayland::window::Action::Fullscreen { id } => {
-                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id)
-                            {
+                        },
+                        platform_specific::wayland::window::Action::Fullscreen { id } => {
+                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id) {
                                 // TODO ASHLEY: allow specific output to be requested for fullscreen?
                                 window.window.set_fullscreen(None);
                                 to_commit.insert(id, window.window.wl_surface().clone());
                             }
-                        }
-                        wayland::window::Action::UnsetFullscreen { id } => {
-                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id)
-                            {
+                        },
+                        platform_specific::wayland::window::Action::UnsetFullscreen { id } => {
+                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id) {
                                 window.window.unset_fullscreen();
                                 to_commit.insert(id, window.window.wl_surface().clone());
                             }
-                        }
-                        wayland::window::Action::InteractiveMove { id } => {
-                            if let (Some(window), Some((seat, last_press))) = (
-                                self.state.windows.iter_mut().find(|w| w.id == id),
-                                self.state.seats.first().and_then(|seat| {
-                                    seat.last_ptr_press.map(|p| (&seat.seat, p.2))
-                                }),
-                            ) {
+                        },
+                        platform_specific::wayland::window::Action::InteractiveMove { id } => {
+                            if let (Some(window), Some((seat, last_press))) = (self.state.windows.iter_mut().find(|w| w.id == id), self.state.seats.first().and_then(|seat| seat.last_ptr_press.map(|p| (&seat.seat, p.2)))) {
                                 window.window.xdg_toplevel()._move(seat, last_press);
                                 to_commit.insert(id, window.window.wl_surface().clone());
                             }
-                        }
-                        wayland::window::Action::InteractiveResize { id, edge } => {
-                            if let (Some(window), Some((seat, last_press))) = (
-                                self.state.windows.iter_mut().find(|w| w.id == id),
-                                self.state.seats.first().and_then(|seat| {
-                                    seat.last_ptr_press.map(|p| (&seat.seat, p.2))
-                                }),
-                            ) {
+                        },
+                        platform_specific::wayland::window::Action::InteractiveResize { id, edge } => {
+                            if let (Some(window), Some((seat, last_press))) = (self.state.windows.iter_mut().find(|w| w.id == id), self.state.seats.first().and_then(|seat| seat.last_ptr_press.map(|p| (&seat.seat, p.2)))) {
                                 window.window.xdg_toplevel().resize(seat, last_press, edge);
                                 to_commit.insert(id, window.window.wl_surface().clone());
                             }
-                        }
-                        wayland::window::Action::ToggleMaximized { id } => {
-                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id)
-                            {
+                        },
+                        platform_specific::wayland::window::Action::ToggleMaximized { id } => {
+                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id) {
                                 if let Some(c) = &window.last_configure {
                                     if c.is_maximized() {
                                         window.window.unset_maximized();
@@ -957,9 +936,9 @@ where
                                     to_commit.insert(id, window.window.wl_surface().clone());
                                 }
                             }
-                        }
-                        wayland::window::Action::ShowWindowMenu { id: _, x: _, y: _ } => todo!(),
-                        wayland::window::Action::Destroy(id) => {
+                        },
+                        platform_specific::wayland::window::Action::ShowWindowMenu { id: _, x: _, y: _ } => todo!(),
+                        platform_specific::wayland::window::Action::Destroy(id) => {
                             if let Some(i) = self.state.windows.iter().position(|l| l.id == id) {
                                 let window = self.state.windows.remove(i);
                                 window.window.xdg_toplevel().destroy();
@@ -973,27 +952,25 @@ where
                                     &mut callback,
                                 );
                             }
-                        }
-                        wayland::window::Action::Mode(id, mode) => {
-                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id)
-                            {
+                        },
+                        platform_specific::wayland::window::Action::Mode(id, mode) => {
+                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id) {
                                 match mode {
                                     Mode::Windowed => {
                                         window.window.unset_fullscreen();
-                                    }
+                                    },
                                     Mode::Fullscreen => {
                                         window.window.set_fullscreen(None);
-                                    }
+                                    },
                                     Mode::Hidden => {
                                         window.window.set_minimized();
-                                    }
+                                    },
                                 }
                                 to_commit.insert(id, window.window.wl_surface().clone());
                             }
-                        }
-                        wayland::window::Action::ToggleFullscreen { id } => {
-                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id)
-                            {
+                        },
+                        platform_specific::wayland::window::Action::ToggleFullscreen { id } => {
+                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id) {
                                 if let Some(c) = &window.last_configure {
                                     if c.is_fullscreen() {
                                         window.window.unset_fullscreen();
@@ -1003,31 +980,22 @@ where
                                     to_commit.insert(id, window.window.wl_surface().clone());
                                 }
                             }
-                        }
-                        wayland::window::Action::AppId { id, app_id } => {
-                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id)
-                            {
+                        },
+                        platform_specific::wayland::window::Action::AppId { id, app_id } => {
+                            if let Some(window) = self.state.windows.iter_mut().find(|w| w.id == id) {
                                 window.window.set_app_id(app_id);
                                 to_commit.insert(id, window.window.wl_surface().clone());
                             }
-                        }
+                        },
                     },
                     Event::Popup(action) => match action {
-                        wayland::popup::Action::Popup { popup, .. } => {
-                            if let Ok((id, parent_id, toplevel_id, wl_surface)) =
-                                self.state.get_popup(popup)
-                            {
+                        platform_specific::wayland::popup::Action::Popup { popup, .. } => {
+                            if let Ok((id, parent_id, toplevel_id, wl_surface)) = self.state.get_popup(popup) {
                                 let object_id = wl_surface.id();
                                 sticky_exit_callback(
                                     IcedSctkEvent::SctkEvent(SctkEvent::PopupEvent {
-                                        variant: crate::sctk_event::PopupEventVariant::Created(
-                                            object_id.clone(),
-                                            id,
-                                        ),
-                                        toplevel_id,
-                                        parent_id,
-                                        id: wl_surface.clone(),
-                                    }),
+                                        variant: crate::sctk_event::PopupEventVariant::Created(object_id.clone(), id),
+                                        toplevel_id, parent_id, id: wl_surface.clone() }),
                                     &self.state,
                                     &mut control_flow,
                                     &mut callback,
@@ -1035,38 +1003,32 @@ where
 
                                 #[cfg(feature = "a11y")]
                                 {
-                                    let adapter = self.init_a11y_adapter(
-                                        &wl_surface,
-                                        None,
-                                        None,
-                                        iced_accessibility::accesskit::Role::Window,
-                                    );
+                                let adapter = self.init_a11y_adapter(&wl_surface, None, None, iced_accessibility::accesskit::Role::Window);
 
-                                    sticky_exit_callback(
-                                        IcedSctkEvent::A11ySurfaceCreated(
-                                            SurfaceIdWrapper::LayerSurface(id),
-                                            adapter,
-                                        ),
-                                        &self.state,
-                                        &mut control_flow,
-                                        &mut callback,
-                                    );
-                                }
+                                sticky_exit_callback(
+                                    IcedSctkEvent::A11ySurfaceCreated(SurfaceIdWrapper::LayerSurface(id), adapter),
+                                    &self.state,
+                                    &mut control_flow,
+                                    &mut callback,
+                                );
                             }
-                        }
+                            }
+                        },
                         // XXX popup destruction must be done carefully
                         // first destroy the uppermost popup, then work down to the requested popup
-                        wayland::popup::Action::Destroy { id } => {
-                            let sctk_popup =
-                                match self.state.popups.iter().position(|s| s.data.id == id) {
-                                    Some(p) => self.state.popups.remove(p),
-                                    None => continue,
-                                };
+                        platform_specific::wayland::popup::Action::Destroy { id } => {
+                            let sctk_popup = match self.state
+                                .popups
+                                .iter()
+                                .position(|s| s.data.id == id)
+                            {
+                                Some(p) => self.state.popups.remove(p),
+                                None => continue,
+                            };
                             let mut to_destroy = vec![sctk_popup];
                             while let Some(popup_to_destroy) = to_destroy.last() {
                                 match popup_to_destroy.data.parent.clone() {
-                                    state::SctkSurface::LayerSurface(_)
-                                    | state::SctkSurface::Window(_) => {
+                                    state::SctkSurface::LayerSurface(_) | state::SctkSurface::Window(_) => {
                                         break;
                                     }
                                     state::SctkSurface::Popup(popup_to_destroy_first) => {
@@ -1074,33 +1036,31 @@ where
                                             .state
                                             .popups
                                             .iter()
-                                            .position(|p| {
-                                                p.popup.wl_surface() == &popup_to_destroy_first
-                                            })
+                                            .position(|p| p.popup.wl_surface() == &popup_to_destroy_first)
                                             .unwrap();
-                                        let popup_to_destroy_first =
-                                            self.state.popups.remove(popup_to_destroy_first);
+                                        let popup_to_destroy_first = self.state.popups.remove(popup_to_destroy_first);
                                         to_destroy.push(popup_to_destroy_first);
                                     }
                                 }
                             }
                             for popup in to_destroy.into_iter().rev() {
-                                sticky_exit_callback(
-                                    IcedSctkEvent::SctkEvent(SctkEvent::PopupEvent {
-                                        variant: PopupEventVariant::Done,
-                                        toplevel_id: popup.data.toplevel.clone(),
-                                        parent_id: popup.data.parent.wl_surface().clone(),
-                                        id: popup.popup.wl_surface().clone(),
-                                    }),
+                                sticky_exit_callback(IcedSctkEvent::SctkEvent(SctkEvent::PopupEvent {
+                                    variant: PopupEventVariant::Done,
+                                    toplevel_id: popup.data.toplevel.clone(),
+                                    parent_id: popup.data.parent.wl_surface().clone(),
+                                    id: popup.popup.wl_surface().clone(),
+                                }),
                                     &self.state,
                                     &mut control_flow,
                                     &mut callback,
                                 );
                             }
-                        }
-                        wayland::popup::Action::Size { id, width, height } => {
-                            if let Some(sctk_popup) =
-                                self.state.popups.iter_mut().find(|s| s.data.id == id)
+                        },
+                        platform_specific::wayland::popup::Action::Size { id, width, height } => {
+                            if let Some(sctk_popup) = self.state
+                                .popups
+                                .iter_mut()
+                                .find(|s| s.data.id == id)
                             {
                                 // update geometry
                                 // update positioner
@@ -1109,40 +1069,31 @@ where
 
                                 pending_redraws.push(sctk_popup.popup.wl_surface().id());
 
-                                sticky_exit_callback(
-                                    IcedSctkEvent::SctkEvent(SctkEvent::PopupEvent {
-                                        variant: PopupEventVariant::Size(width, height),
-                                        toplevel_id: sctk_popup.data.toplevel.clone(),
-                                        parent_id: sctk_popup.data.parent.wl_surface().clone(),
-                                        id: sctk_popup.popup.wl_surface().clone(),
-                                    }),
+                                sticky_exit_callback(IcedSctkEvent::SctkEvent(SctkEvent::PopupEvent {
+                                    variant: PopupEventVariant::Size(width, height),
+                                    toplevel_id: sctk_popup.data.toplevel.clone(),
+                                    parent_id: sctk_popup.data.parent.wl_surface().clone(),
+                                    id: sctk_popup.popup.wl_surface().clone(),
+                                }),
                                     &self.state,
                                     &mut control_flow,
                                     &mut callback,
                                 );
                             }
-                        }
+                        },
                         // TODO probably remove this?
-                        wayland::popup::Action::Grab { .. } => {}
+                        platform_specific::wayland::popup::Action::Grab { .. } => {},
                     },
                     Event::DataDevice(action) => {
                         match action.inner {
-                            wayland::data_device::ActionInner::Accept(mime_type) => {
-                                let drag_offer = match self
-                                    .state
-                                    .dnd_offer
-                                    .as_mut()
-                                    .and_then(|o| o.offer.as_ref())
-                                {
+                            platform_specific::wayland::data_device::ActionInner::Accept(mime_type) => {
+                                let drag_offer = match self.state.dnd_offer.as_mut().and_then(|o| o.offer.as_ref()) {
                                     Some(d) => d,
                                     None => continue,
                                 };
                                 drag_offer.accept_mime_type(drag_offer.serial, mime_type);
                             }
-                            wayland::data_device::ActionInner::StartInternalDnd {
-                                origin_id,
-                                icon_id,
-                            } => {
+                            platform_specific::wayland::data_device::ActionInner::StartInternalDnd { origin_id, icon_id } => {
                                 let qh = &self.state.queue_handle.clone();
                                 let seat = match self.state.seats.get(0) {
                                     Some(s) => s,
@@ -1154,25 +1105,14 @@ where
                                 };
 
                                 let origin = match self
-                                    .state
-                                    .windows
-                                    .iter()
-                                    .find(|w| w.id == origin_id)
-                                    .map(|w| Some(w.window.wl_surface()))
-                                    .unwrap_or_else(|| {
-                                        self.state
-                                            .layer_surfaces
-                                            .iter()
-                                            .find(|l| l.id == origin_id)
-                                            .map(|l| Some(l.surface.wl_surface()))
-                                            .unwrap_or_else(|| {
-                                                self.state
-                                                    .popups
-                                                    .iter()
-                                                    .find(|p| p.data.id == origin_id)
-                                                    .map(|p| p.popup.wl_surface())
-                                            })
-                                    }) {
+                                .state
+                                .windows
+                                .iter()
+                                .find(|w| w.id == origin_id)
+                                .map(|w| Some(w.window.wl_surface()))
+                                .unwrap_or_else(|| self.state.layer_surfaces.iter()
+                                                .find(|l| l.id == origin_id).map(|l| Some(l.surface.wl_surface()))
+                                .unwrap_or_else(|| self.state.popups.iter().find(|p| p.data.id == origin_id).map(|p| p.popup.wl_surface()))) {
                                     Some(s) => s.clone(),
                                     None => continue,
                                 };
@@ -1180,14 +1120,9 @@ where
                                     Some(s) => &s.data_device,
                                     None => continue,
                                 };
-                                let icon_surface = if let Some(icon_id) = icon_id {
+                                let icon_surface =  if let Some(icon_id) = icon_id{
                                     let wl_surface = self.state.compositor_state.create_surface(qh);
-                                    DragSource::start_internal_drag(
-                                        device,
-                                        &origin,
-                                        Some(&wl_surface),
-                                        serial,
-                                    );
+                                    DragSource::start_internal_drag(device, &origin, Some(&wl_surface), serial);
                                     Some((wl_surface, icon_id))
                                 } else {
                                     DragSource::start_internal_drag(device, &origin, None, serial);
@@ -1203,13 +1138,7 @@ where
                                     cur_write: None,
                                 });
                             }
-                            wayland::data_device::ActionInner::StartDnd {
-                                mime_types,
-                                actions,
-                                origin_id,
-                                icon_id,
-                                data,
-                            } => {
+                            platform_specific::wayland::data_device::ActionInner::StartDnd { mime_types, actions, origin_id, icon_id, data } => {
                                 if let Some(dnd_source) = self.state.dnd_source.as_ref() {
                                     if dnd_source.cur_write.is_some() {
                                         continue;
@@ -1221,34 +1150,19 @@ where
                                     None => continue,
                                 };
                                 // Get last pointer press or touch down serial, whichever is newer
-                                let Some(serial) = seat
-                                    .last_ptr_press
-                                    .map(|s| s.2)
-                                    .max(seat.last_touch_down.map(|s| s.2))
-                                else {
+                                let Some(serial) = seat.last_ptr_press.map(|s| s.2).max(seat.last_touch_down.map(|s| s.2)) else {
                                     continue;
                                 };
 
                                 let origin = match self
-                                    .state
-                                    .windows
-                                    .iter()
-                                    .find(|w| w.id == origin_id)
-                                    .map(|w| Some(w.window.wl_surface()))
-                                    .unwrap_or_else(|| {
-                                        self.state
-                                            .layer_surfaces
-                                            .iter()
-                                            .find(|l| l.id == origin_id)
-                                            .map(|l| Some(l.surface.wl_surface()))
-                                            .unwrap_or_else(|| {
-                                                self.state
-                                                    .popups
-                                                    .iter()
-                                                    .find(|p| p.data.id == origin_id)
-                                                    .map(|p| p.popup.wl_surface())
-                                            })
-                                    }) {
+                                .state
+                                .windows
+                                .iter()
+                                .find(|w| w.id == origin_id)
+                                .map(|w| Some(w.window.wl_surface()))
+                                .unwrap_or_else(|| self.state.layer_surfaces.iter()
+                                                .find(|l| l.id == origin_id).map(|l| Some(l.surface.wl_surface()))
+                                .unwrap_or_else(|| self.state.popups.iter().find(|p| p.data.id == origin_id).map(|p| p.popup.wl_surface()))) {
                                     Some(s) => s.clone(),
                                     None => continue,
                                 };
@@ -1256,15 +1170,8 @@ where
                                     Some(s) => &s.data_device,
                                     None => continue,
                                 };
-                                let source = self
-                                    .state
-                                    .data_device_manager_state
-                                    .create_drag_and_drop_source(
-                                        qh,
-                                        mime_types.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
-                                        actions,
-                                    );
-                                let icon_surface = if let Some((icon_id, offset)) = icon_id {
+                                let source = self.state.data_device_manager_state.create_drag_and_drop_source(qh, mime_types.iter().map(|s| s.as_str()).collect::<Vec<_>>(), actions);
+                                let icon_surface =  if let Some((icon_id, offset)) = icon_id{
                                     let icon_native_id = match &icon_id {
                                         DndIcon::Custom(icon_id) => *icon_id,
                                         DndIcon::Widget(icon_id, _) => *icon_id,
@@ -1276,56 +1183,45 @@ where
                                     source.start_drag(device, &origin, Some(&wl_surface), serial);
                                     sticky_exit_callback(
                                         IcedSctkEvent::DndSurfaceCreated(
-                                            wl_surface.clone(),
-                                            icon_id,
-                                            origin_id,
-                                        ),
-                                        &self.state,
-                                        &mut control_flow,
-                                        &mut callback,
+                                                    wl_surface.clone(),
+                                                    icon_id,
+                                                    origin_id)
+                                                ,
+                                            &self.state,
+                                            &mut control_flow,
+                                            &mut callback
                                     );
-                                    Some((wl_surface, icon_native_id))
+                                   Some((wl_surface, icon_native_id))
                                 } else {
                                     source.start_drag(device, &origin, None, serial);
                                     None
                                 };
-                                self.state.dnd_source = Some(Dnd {
-                                    origin_id,
-                                    origin,
-                                    source: Some((source, data)),
-                                    icon_surface,
-                                    pending_requests: Vec::new(),
-                                    pipe: None,
-                                    cur_write: None,
-                                });
-                            }
-                            wayland::data_device::ActionInner::DndFinished => {
-                                if let Some(offer) =
-                                    self.state.dnd_offer.take().filter(|o| o.offer.is_some())
-                                {
+                                self.state.dnd_source = Some(Dnd { origin_id, origin, source: Some((source, data)), icon_surface, pending_requests: Vec::new(), pipe: None, cur_write: None });
+                            },
+                            platform_specific::wayland::data_device::ActionInner::DndFinished => {
+                                if let Some(offer) = self.state.dnd_offer.take().filter(|o| o.offer.is_some()) {
                                     if offer.dropped {
                                         offer.offer.unwrap().finish();
-                                    } else {
+                                    }
+                                    else {
                                         self.state.dnd_offer = Some(offer);
                                     }
-                                }
-                            }
-                            wayland::data_device::ActionInner::DndCancelled => {
+                               }
+                            },
+                            platform_specific::wayland::data_device::ActionInner::DndCancelled => {
                                 if let Some(mut source) = self.state.dnd_source.take() {
                                     if let Some(s) = source.icon_surface.take() {
                                         s.0.destroy();
                                     }
                                     sticky_exit_callback(
-                                        IcedSctkEvent::SctkEvent(SctkEvent::DataSource(
-                                            DataSourceEvent::DndCancelled,
-                                        )),
-                                        &self.state,
-                                        &mut control_flow,
-                                        &mut callback,
+                                        IcedSctkEvent::SctkEvent(SctkEvent::DataSource(DataSourceEvent::DndCancelled)),
+                                            &self.state,
+                                            &mut control_flow,
+                                            &mut callback
                                     );
                                 }
-                            }
-                            wayland::data_device::ActionInner::RequestDndData(mime_type) => {
+                            },
+                            platform_specific::wayland::data_device::ActionInner::RequestDndData (mime_type) => {
                                 if let Some(dnd_offer) = self.state.dnd_offer.as_mut() {
                                     let Some(offer) = dnd_offer.offer.as_ref() else {
                                         continue;
@@ -1335,136 +1231,83 @@ where
                                         Err(_) => continue, // TODO error handling
                                     };
                                     let loop_handle = self.event_loop.handle();
-                                    match self.event_loop.handle().insert_source(
-                                        read_pipe,
-                                        move |_, f, state| {
-                                            let mut dnd_offer = match state.dnd_offer.take() {
-                                                Some(s) => s,
-                                                None => return PostAction::Continue,
-                                            };
-                                            let Some(offer) = dnd_offer.offer.as_ref() else {
-                                                return PostAction::Remove;
-                                            };
-                                            let (mime_type, data, token) =
-                                                match dnd_offer.cur_read.take() {
-                                                    Some(s) => s,
-                                                    None => return PostAction::Continue,
-                                                };
-                                            let mut reader = BufReader::new(f.as_ref());
-                                            let consumed = match reader.fill_buf() {
-                                                Ok(buf) => {
-                                                    if buf.is_empty() {
-                                                        loop_handle.remove(token);
-                                                        state.sctk_events.push(
-                                                            SctkEvent::DndOffer {
-                                                                event: DndOfferEvent::Data {
-                                                                    data,
-                                                                    mime_type,
-                                                                },
-                                                                surface: dnd_offer.surface.clone(),
-                                                            },
-                                                        );
-                                                        if dnd_offer.dropped {
-                                                            offer.finish();
-                                                        } else {
-                                                            state.dnd_offer = Some(dnd_offer);
-                                                        }
+                                    match self.event_loop.handle().insert_source(read_pipe, move |_, f, state| {
+                                        let mut dnd_offer = match state.dnd_offer.take() {
+                                            Some(s) => s,
+                                            None => return PostAction::Continue,
+                                        };
+                                        let Some(offer) = dnd_offer.offer.as_ref() else {
+                                            return PostAction::Remove;
+                                        };
+                                        let (mime_type, data, token) = match dnd_offer.cur_read.take() {
+                                            Some(s) => s,
+                                            None => return PostAction::Continue,
+                                        };
+                                        let mut reader = BufReader::new(f.as_ref());
+                                        let consumed = match reader.fill_buf() {
+                                            Ok(buf) => {
+                                                if buf.is_empty() {
+                                                    loop_handle.remove(token);
+                                                    state.sctk_events.push(SctkEvent::DndOffer { event: DndOfferEvent::Data { data, mime_type }, surface: dnd_offer.surface.clone() });
+                                                    if dnd_offer.dropped {
+                                                        offer.finish();
                                                     } else {
-                                                        let mut data = data;
-                                                        data.extend_from_slice(buf);
-                                                        dnd_offer.cur_read =
-                                                            Some((mime_type, data, token));
                                                         state.dnd_offer = Some(dnd_offer);
                                                     }
-                                                    buf.len()
-                                                }
-                                                Err(e)
-                                                    if matches!(
-                                                        e.kind(),
-                                                        std::io::ErrorKind::Interrupted
-                                                    ) =>
-                                                {
-                                                    dnd_offer.cur_read =
-                                                        Some((mime_type, data, token));
+                                                } else {
+                                                    let mut data = data;
+                                                    data.extend_from_slice(buf);
+                                                    dnd_offer.cur_read = Some((mime_type, data, token));
                                                     state.dnd_offer = Some(dnd_offer);
-                                                    return PostAction::Continue;
                                                 }
-                                                Err(e) => {
-                                                    error!("Error reading selection data: {}", e);
-                                                    if !dnd_offer.dropped {
-                                                        state.dnd_offer = Some(dnd_offer);
-                                                    }
-                                                    return PostAction::Remove;
+                                                buf.len()
+                                            },
+                                            Err(e) if matches!(e.kind(), std::io::ErrorKind::Interrupted) => {
+                                                dnd_offer.cur_read = Some((mime_type, data, token));
+                                                state.dnd_offer = Some(dnd_offer);
+                                                return PostAction::Continue;
+                                            },
+                                            Err(e) => {
+                                                error!("Error reading selection data: {}", e);
+                                                if !dnd_offer.dropped {
+                                                    state.dnd_offer = Some(dnd_offer);
                                                 }
-                                            };
-                                            reader.consume(consumed);
-                                            PostAction::Continue
-                                        },
-                                    ) {
+                                                return PostAction::Remove;
+                                            },
+                                        };
+                                        reader.consume(consumed);
+                                        PostAction::Continue
+                                    }) {
                                         Ok(token) => {
-                                            dnd_offer.cur_read =
-                                                Some((mime_type.clone(), Vec::new(), token));
-                                        }
+                                            dnd_offer.cur_read = Some((mime_type.clone(), Vec::new(), token));
+                                        },
                                         Err(_) => continue,
                                     };
                                 }
                             }
-                            wayland::data_device::ActionInner::SetActions {
-                                preferred,
-                                accepted,
-                            } => {
-                                if let Some(offer) =
-                                    self.state.dnd_offer.as_ref().and_then(|o| o.offer.as_ref())
-                                {
+                            platform_specific::wayland::data_device::ActionInner::SetActions { preferred, accepted } => {
+                                if let Some(offer) = self.state.dnd_offer.as_ref().and_then(|o| o.offer.as_ref()) {
                                     offer.set_actions(accepted, preferred);
                                 }
                             }
                         }
-                    }
+                    },
                     Event::Activation(activation_event) => match activation_event {
-                        wayland::activation::Action::RequestToken {
-                            app_id,
-                            window,
-                            message,
-                        } => {
+                        platform_specific::wayland::activation::Action::RequestToken { app_id, window, message } => {
                             if let Some(activation_state) = self.state.activation_state.as_ref() {
                                 let (seat_and_serial, surface) = if let Some(id) = window {
-                                    let surface = self
-                                        .state
-                                        .windows
-                                        .iter()
-                                        .find(|w| w.id == id)
+                                    let surface = self.state.windows.iter().find(|w| w.id == id)
                                         .map(|w| w.window.wl_surface().clone())
-                                        .or_else(|| {
-                                            self.state
-                                                .layer_surfaces
-                                                .iter()
-                                                .find(|l| l.id == id)
-                                                .map(|l| l.surface.wl_surface().clone())
-                                        });
+                                        .or_else(|| self.state.layer_surfaces.iter().find(|l| l.id == id)
+                                            .map(|l| l.surface.wl_surface().clone())
+                                        );
                                     let seat_and_serial = surface.as_ref().and_then(|surface| {
-                                        self.state.seats.first().and_then(|seat| {
-                                            if seat
-                                                .kbd_focus
-                                                .as_ref()
-                                                .map(|focus| focus == surface)
-                                                .unwrap_or(false)
-                                            {
-                                                seat.last_kbd_press
-                                                    .as_ref()
-                                                    .map(|(_, serial)| (seat.seat.clone(), *serial))
-                                            } else if seat
-                                                .ptr_focus
-                                                .as_ref()
-                                                .map(|focus| focus == surface)
-                                                .unwrap_or(false)
-                                            {
-                                                seat.last_ptr_press.as_ref().map(
-                                                    |(_, _, serial)| (seat.seat.clone(), *serial),
-                                                )
-                                            } else {
-                                                None
-                                            }
+                                        self.state.seats.first().and_then(|seat| if seat.kbd_focus.as_ref().map(|focus| focus == surface).unwrap_or(false) {
+                                            seat.last_kbd_press.as_ref().map(|(_, serial)| (seat.seat.clone(), *serial))
+                                        } else if seat.ptr_focus.as_ref().map(|focus| focus == surface).unwrap_or(false) {
+                                            seat.last_ptr_press.as_ref().map(|(_, _, serial)| (seat.seat.clone(), *serial))
+                                        } else {
+                                            None
                                         })
                                     });
 
@@ -1473,17 +1316,14 @@ where
                                     (None, None)
                                 };
 
-                                activation_state.request_token_with_data(
-                                    &self.state.queue_handle,
-                                    IcedRequestData::new(
-                                        RequestData {
-                                            app_id,
-                                            seat_and_serial,
-                                            surface,
-                                        },
-                                        message,
-                                    ),
-                                );
+                                activation_state.request_token_with_data(&self.state.queue_handle, IcedRequestData::new(
+                                    RequestData {
+                                        app_id,
+                                        seat_and_serial,
+                                        surface,
+                                    },
+                                    message,
+                                ));
                             } else {
                                 // if we don't have the global, we don't want to stall the app
                                 sticky_exit_callback(
@@ -1493,33 +1333,23 @@ where
                                     &mut callback,
                                 )
                             }
-                        }
-                        wayland::activation::Action::Activate { window, token } => {
+                        },
+                        platform_specific::wayland::activation::Action::Activate { window, token } => {
                             if let Some(activation_state) = self.state.activation_state.as_ref() {
-                                if let Some(surface) = self
-                                    .state
-                                    .windows
-                                    .iter()
-                                    .find(|w| w.id == window)
-                                    .map(|w| w.window.wl_surface())
-                                {
+                                if let Some(surface) = self.state.windows.iter().find(|w| w.id == window).map(|w| w.window.wl_surface()) {
                                     activation_state.activate::<SctkState<T>>(surface, token)
                                 }
                             }
-                        }
+                        },
                     },
                     Event::SessionLock(action) => match action {
-                        wayland::session_lock::Action::Lock => {
+                        platform_specific::wayland::session_lock::Action::Lock => {
                             if self.state.session_lock.is_none() {
                                 // TODO send message on error? When protocol doesn't exist.
-                                self.state.session_lock = self
-                                    .state
-                                    .session_lock_state
-                                    .lock(&self.state.queue_handle)
-                                    .ok();
+                                self.state.session_lock = self.state.session_lock_state.lock(&self.state.queue_handle).ok();
                             }
                         }
-                        wayland::session_lock::Action::Unlock => {
+                        platform_specific::wayland::session_lock::Action::Unlock => {
                             if let Some(session_lock) = self.state.session_lock.take() {
                                 session_lock.unlock();
                             }
@@ -1532,34 +1362,27 @@ where
                                 &mut callback,
                             );
                         }
-                        wayland::session_lock::Action::LockSurface {
-                            id,
-                            output,
-                            _phantom,
-                        } => {
+                        platform_specific::wayland::session_lock::Action::LockSurface { id, output, _phantom } => {
                             // TODO how to handle this when there's no lock?
                             if let Some(surface) = self.state.get_lock_surface(id, &output) {
                                 sticky_exit_callback(
-                                    IcedSctkEvent::SctkEvent(
-                                        SctkEvent::SessionLockSurfaceCreated {
-                                            surface,
-                                            native_id: id,
-                                        },
-                                    ),
+                                    IcedSctkEvent::SctkEvent(SctkEvent::SessionLockSurfaceCreated {surface, native_id: id}),
                                     &self.state,
                                     &mut control_flow,
                                     &mut callback,
                                 );
                             }
                         }
-                        wayland::session_lock::Action::DestroyLockSurface { id } => {
+                        platform_specific::wayland::session_lock::Action::DestroyLockSurface { id } => {
                             if let Some(i) =
-                                self.state.lock_surfaces.iter().position(|s| s.id == id)
+                                self.state.lock_surfaces.iter().position(|s| {
+                                    s.id == id
+                                })
                             {
                                 let surface = self.state.lock_surfaces.remove(i);
                                 sticky_exit_callback(
                                     IcedSctkEvent::SctkEvent(SctkEvent::SessionLockSurfaceDone {
-                                        surface: surface.session_lock_surface.wl_surface().clone(),
+                                        surface: surface.session_lock_surface.wl_surface().clone()
                                     }),
                                     &self.state,
                                     &mut control_flow,
@@ -1567,7 +1390,7 @@ where
                                 );
                             }
                         }
-                    },
+                    }
                 }
             }
 

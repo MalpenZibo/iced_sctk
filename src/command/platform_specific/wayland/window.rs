@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 
 use iced_core::layout::Limits;
 use iced_core::window::Mode;
+use iced_core::Size;
 use iced_futures::MaybeSend;
 use sctk::reexports::protocols::xdg::shell::client::xdg_toplevel::ResizeEdge;
 
@@ -306,6 +307,92 @@ impl<T> fmt::Debug for Action<T> {
                 "Action::Window::Mode {{ id: {:?}, app_id: {:?} }}",
                 id, app_id
             ),
+        }
+    }
+}
+
+/// error type for unsupported actions
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum Error {
+    /// Not supported
+    #[error("Not supported")]
+    NotSupported,
+}
+
+impl<T> TryFrom<iced_runtime::window::Action<T>> for Action<T> {
+    type Error = Error;
+
+    fn try_from(value: iced_runtime::window::Action<T>) -> Result<Self, Self::Error> {
+        match value {
+            iced_runtime::window::Action::Spawn(id, settings) => {
+                let min = settings.min_size.unwrap_or(Size::new(1., 1.));
+                let max = settings.max_size.unwrap_or(Size::INFINITY);
+                let builder = SctkWindowSettings {
+                    window_id: id,
+                    app_id: Some(settings.platform_specific.application_id),
+                    title: None,
+                    parent: None,
+                    autosize: false,
+                    size_limits: Limits::NONE
+                        .min_width(min.width)
+                        .min_height(min.height)
+                        .max_width(max.width)
+                        .max_height(max.height),
+                    size: (
+                        settings.size.width.round() as u32,
+                        settings.size.height.round() as u32,
+                    ),
+                    resizable: settings
+                        .resizable
+                        .then_some(4.),
+                    client_decorations: !settings.decorations,
+                    transparent: settings.transparent,
+                    xdg_activation_token: None,
+                };
+                Ok(Action::Window {
+                    builder,
+                    _phantom: PhantomData,
+                })
+            }
+            iced_runtime::window::Action::Close(id) => Ok(Action::Destroy(id)),
+            iced_runtime::window::Action::Resize(id, size) => Ok(Action::Size {
+                id,
+                width: size.width.round() as u32,
+                height: size.height.round() as u32,
+            }),
+            iced_runtime::window::Action::Drag(id) => Ok(Action::InteractiveMove { id }),
+            iced_runtime::window::Action::FetchSize(_, _)
+            | iced_runtime::window::Action::FetchMaximized(_, _)
+            | iced_runtime::window::Action::Move(_, _)
+            | iced_runtime::window::Action::FetchMode(_, _)
+            | iced_runtime::window::Action::ToggleMaximize(_)
+            | iced_runtime::window::Action::ToggleDecorations(_)
+            | iced_runtime::window::Action::RequestUserAttention(_, _)
+            | iced_runtime::window::Action::GainFocus(_)
+            | iced_runtime::window::Action::ChangeLevel(_, _)
+            | iced_runtime::window::Action::ShowSystemMenu(_)
+            | iced_runtime::window::Action::FetchId(_, _)
+            | iced_runtime::window::Action::ChangeIcon(_, _)
+            | iced_runtime::window::Action::Screenshot(_, _)
+            | iced_runtime::window::Action::FetchMinimized(_, _) => Err(Error::NotSupported),
+            iced_runtime::window::Action::Maximize(id, maximized) => {
+                if maximized {
+                    Ok(Action::Maximize { id })
+                } else {
+                    Ok(Action::UnsetMaximize { id })
+                }
+            }
+            iced_runtime::window::Action::Minimize(id, bool) => {
+                if bool {
+                    Ok(Action::Minimize { id })
+                } else {
+                    Err(Error::NotSupported)
+                }
+            }
+            iced_runtime::window::Action::ChangeMode(id, mode) => {
+                Ok(Action::Mode(id, mode.into()))
+            }
+            _ => Err(Error::NotSupported),
         }
     }
 }

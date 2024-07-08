@@ -1,18 +1,10 @@
 #[cfg(feature = "a11y")]
 use crate::sctk_event::ActionRequestEvent;
 use crate::{
-    clipboard::Clipboard,
-    command::wayland::{self, data_device::DndIcon, popup},
-    commands::{layer_surface::get_layer_surface, window::get_window},
-    dpi::{LogicalPosition, PhysicalPosition},
-    error::{self, Error},
-    event_loop::{control_flow::ControlFlow, proxy, state::SctkState, SctkEventLoop},
-    sctk_event::{
+    clipboard::Clipboard, command::Test, commands::{layer_surface::get_layer_surface, window::get_window}, dpi::{LogicalPosition, PhysicalPosition}, error::{self, Error}, event_loop::{control_flow::ControlFlow, proxy, state::SctkState, SctkEventLoop}, sctk_event::{
         DataSourceEvent, IcedSctkEvent, KeyboardEventVariant, LayerSurfaceEventVariant,
         PopupEventVariant, SctkEvent, StartCause,
-    },
-    settings,
-    widget::operation::{self, MapOperation, OperationOutputWrapper, OperationWrapper},
+    }, settings
 };
 use float_cmp::{approx_eq, F32Margin, F64Margin};
 use futures::{channel::mpsc, task, Future, FutureExt, StreamExt};
@@ -28,22 +20,28 @@ use iced_futures::{
         mouse,
         renderer::Style,
         time::Instant,
-        widget::{tree, Tree},
+        widget::{
+            operation::{self},
+            tree, Operation, Tree,
+        },
         Widget,
     },
     Executor, Runtime, Subscription,
 };
 use tracing::error;
 
-use iced_core::{
-    widget::{operation::Outcome, Operation},
-    window::Id as SurfaceId,
+use crate::command::{
+    self,
+    platform_specific::{
+        self,
+        wayland::{data_device::DndIcon, popup, window},
+    },
 };
+use iced_core::window::Id as SurfaceId;
 use iced_futures::core::Clipboard as IcedClipboard;
 use iced_graphics::{compositor, Compositor, Viewport};
 use iced_runtime::{
     clipboard,
-    command::{self},
     core::{mouse::Interaction, touch, Color, Point, Size},
     multi_window::Program,
     system, user_interface, Command, Debug, UserInterface,
@@ -76,17 +74,17 @@ pub enum Event<Message> {
     // (maybe we should also allow users to listen/react to those internal messages?)
 
     /// layer surface requests from the client
-    LayerSurface(wayland::layer_surface::Action<Message>),
+    LayerSurface(platform_specific::wayland::layer_surface::Action<Message>),
     /// window requests from the client
-    Window(wayland::window::Action<Message>),
+    Window(platform_specific::wayland::window::Action<Message>),
     /// popup requests from the client
-    Popup(wayland::popup::Action<Message>),
+    Popup(platform_specific::wayland::popup::Action<Message>),
     /// data device requests from the client
-    DataDevice(wayland::data_device::Action<Message>),
+    DataDevice(platform_specific::wayland::data_device::Action<Message>),
     /// xdg-activation request from the client
-    Activation(wayland::activation::Action<Message>),
+    Activation(platform_specific::wayland::activation::Action<Message>),
     /// data session lock requests from the client
-    SessionLock(wayland::session_lock::Action<Message>),
+    SessionLock(platform_specific::wayland::session_lock::Action<Message>),
     /// request sctk to set the cursor of the active pointer
     SetCursor(Interaction),
     /// Application Message
@@ -920,6 +918,7 @@ where
                         let state = e.as_widget().state();
                         let tag = e.as_widget().tag();
                         let mut tree = Tree {
+                            // id: e.as_widget().id(),
                             tag,
                             state,
                             children: e.as_widget().children(),
@@ -932,6 +931,7 @@ where
                     DndIcon::Widget(id, widget_state) => {
                         let mut e = application.view(id);
                         let mut tree = Tree {
+                            // id: e.as_widget().id(),
                             tag: e.as_widget().tag(),
                             state: tree::State::Some(widget_state),
                             children: e.as_widget().children(),
@@ -988,7 +988,9 @@ where
                     &mut renderer,
                     state.theme(),
                     &Style {
+                        // icon_color: state.icon_color(),
                         text_color: state.text_color(),
+                        // scale_factor: state.scale_factor(),
                     },
                     state.cursor(),
                 );
@@ -1425,7 +1427,9 @@ where
                         &mut renderer,
                         state.theme(),
                         &Style {
+                            // icon_color: state.icon_color(),
                             text_color: state.text_color(),
+                            // scale_factor: state.scale_factor(),
                         },
                         state.cursor(),
                     );
@@ -1615,7 +1619,7 @@ where
                 match id {
                     SurfaceIdWrapper::LayerSurface(inner) => {
                         ev_proxy.send_event(Event::LayerSurface(
-                            crate::command::wayland::layer_surface::Action::Size {
+                            command::platform_specific::wayland::layer_surface::Action::Size {
                                 id: inner,
                                 width: Some(w),
                                 height: Some(h),
@@ -1624,7 +1628,7 @@ where
                     }
                     SurfaceIdWrapper::Window(inner) => {
                         ev_proxy.send_event(Event::Window(
-                            crate::command::wayland::window::Action::Size {
+                            command::platform_specific::wayland::window::Action::Size {
                                 id: inner,
                                 width: w,
                                 height: h,
@@ -1633,7 +1637,7 @@ where
                     }
                     SurfaceIdWrapper::Popup(inner) => {
                         ev_proxy.send_event(Event::Popup(
-                            crate::command::wayland::popup::Action::Size {
+                            command::platform_specific::wayland::popup::Action::Size {
                                 id: inner,
                                 width: w,
                                 height: h,
@@ -1785,12 +1789,13 @@ where
         {
             let logical_size = Size::<f32>::new(w, h);
             self.viewport_changed = true;
+
+            let scale = self.application_scale_factor * self.surface_scale_factor;
             let physical_size = Size::new(
-                (logical_size.width as f64 * self.scale_factor()).ceil() as u32,
-                (logical_size.height as f64 * self.scale_factor()).ceil() as u32,
+                (logical_size.width as f64 * scale).ceil() as u32,
+                (logical_size.height as f64 * scale).ceil() as u32,
             );
-            self.viewport = Viewport::with_physical_size(physical_size, self.scale_factor());
-            // self.viewport = Viewport::with_logical_size(logical_size, self.scale_factor());
+            self.viewport = Viewport::with_physical_size(physical_size, scale);
             if let Some(wp_viewport) = self.wp_viewport.as_ref() {
                 wp_viewport.set_destination(
                     logical_size.width.ceil() as i32,
@@ -1821,10 +1826,6 @@ where
                 (logical_size.height as f64 * scale).ceil() as u32,
             );
             self.viewport = Viewport::with_physical_size(physical_size, scale);
-            // self.viewport = Viewport::with_logical_size(
-            //     logical_size,
-            //     self.application_scale_factor * self.surface_scale_factor,
-            // );
             if let Some(wp_viewport) = self.wp_viewport.as_ref() {
                 wp_viewport.set_destination(
                     logical_size.width.ceil() as i32,
@@ -1872,6 +1873,11 @@ where
         self.appearance.text_color
     }
 
+    /// Returns the current icon [`Color`] of the [`State`].
+    pub fn icon_color(&self) -> Color {
+        self.appearance.text_color
+    }
+
     pub fn set_cursor_position(&mut self, p: Option<LogicalPosition<f64>>) {
         self.cursor_position = p.map(|p| p.to_physical(self.application_scale_factor));
     }
@@ -1895,7 +1901,7 @@ pub(crate) fn update<A, E, C>(
     proxy: &mut proxy::Proxy<Event<A::Message>>,
     debug: &mut Debug,
     messages: &mut Vec<A::Message>,
-    actions: &mut Vec<command::Action<A::Message>>,
+    actions: &mut Vec<iced_runtime::command::Action<A::Message>>,
     graphics_info: impl FnOnce() -> compositor::Information + Copy,
     auto_size_surfaces: &mut HashMap<SurfaceIdWrapper, (u32, u32, Limits, bool)>,
     clipboard: &mut Clipboard,
@@ -1968,7 +1974,7 @@ fn run_command<A, C, E>(
     debug: &mut Debug,
     graphics_info: impl FnOnce() -> compositor::Information + Copy,
     auto_size_surfaces: &mut HashMap<SurfaceIdWrapper, (u32, u32, Limits, bool)>,
-    actions: &mut Vec<command::Action<A::Message>>,
+    actions: &mut Vec<iced_runtime::command::Action<A::Message>>,
     clipboard: &mut Clipboard,
 ) where
     A: Application,
@@ -2000,14 +2006,14 @@ fn handle_actions<A, C, E>(
     cache: &mut user_interface::Cache,
     state: Option<&State<A, C>>,
     renderer: &mut A::Renderer,
-    action: command::Action<A::Message>,
+    action: iced_runtime::command::Action<A::Message>,
     runtime: MyRuntime<E, A::Message>,
     proxy: &mut proxy::Proxy<Event<A::Message>>,
     debug: &mut Debug,
     _graphics_info: impl FnOnce() -> compositor::Information + Copy,
     auto_size_surfaces: &mut HashMap<SurfaceIdWrapper, (u32, u32, Limits, bool)>,
     clipboard: &mut Clipboard,
-) -> Option<command::Action<A::Message>>
+) -> Option<iced_runtime::command::Action<A::Message>>
 where
     A: Application,
     E: Executor,
@@ -2015,28 +2021,67 @@ where
     C: Compositor,
 {
     match action {
-        command::Action::Future(future) => {
+        iced_runtime::command::Action::Future(future) => {
             runtime.spawn(Box::pin(
                 future.map(|e| Event::SctkEvent(IcedSctkEvent::UserEvent(e))),
             ));
         }
-        command::Action::Stream(stream) => {
+        iced_runtime::command::Action::Stream(stream) => {
             runtime.run(Box::pin(
                 stream.map(|e| Event::SctkEvent(IcedSctkEvent::UserEvent(e))),
             ));
         }
-        command::Action::Clipboard(action) => match action {
+        iced_runtime::command::Action::Clipboard(action) => match action {
             clipboard::Action::Read(s_to_msg, kind) => {
                 let contents = clipboard.read(kind);
                 let message = s_to_msg(contents);
                 proxy.send_event(Event::Message(message));
             }
             clipboard::Action::Write(contents, kind) => clipboard.write(kind, contents),
+            // clipboard::Action::WriteData(contents) => {
+            //     clipboard.write_data(ClipboardStoreData(contents))
+            // }
+            // clipboard::Action::ReadData(allowed, to_msg) => {
+            //     let contents = clipboard.read_data(allowed);
+            //     let message = to_msg(contents);
+            //     proxy.send_event(Event::Message(message));
+            // }
+            // clipboard::Action::ReadPrimary(s_to_msg) => {
+            //     let contents = clipboard.read_primary();
+            //     let message = s_to_msg(contents);
+            //     proxy.send_event(Event::Message(message));
+            // }
+            // clipboard::Action::WritePrimary(content) => clipboard.write_primary(content),
+            // clipboard::Action::WritePrimaryData(content) => {
+            //     clipboard.write_primary_data(ClipboardStoreData(content))
+            // }
+            // clipboard::Action::ReadPrimaryData(a, to_msg) => {
+            //     let contents = clipboard.read_primary_data(a);
+            //     let message = to_msg(contents);
+            //     proxy.send_event(Event::Message(message));
+            // }
         },
-        command::Action::Window(..) => {
-            unimplemented!("Use platform specific events instead")
+        iced_runtime::command::Action::Window(action) => {
+            if let Ok(a) = action.try_into() {
+                return handle_actions(
+                    application,
+                    cache,
+                    state,
+                    renderer,
+                    iced_runtime::command::Action::Custom(Box::new(
+                        command::platform_specific::wayland::Action::Window(a),
+                    )),
+                    runtime,
+                    proxy,
+                    debug,
+                    _graphics_info,
+                    auto_size_surfaces,
+                    clipboard,
+                );
+            }
         }
-        command::Action::System(action) => match action {
+        iced_runtime::command::Action::Window(action) => {}
+        iced_runtime::command::Action::System(action) => match action {
             system::Action::QueryInformation(_tag) => {
                 #[cfg(feature = "system")]
                 {
@@ -2053,14 +2098,14 @@ where
                 }
             }
         },
-        command::Action::Widget(action) => {
+        iced_runtime::command::Action::Widget(action) => {
             let state = match state {
                 Some(s) => s,
                 None => return None,
             };
             let id = &state.id;
             let mut current_cache = std::mem::take(cache);
-            let mut current_operation = Some(Box::new(OperationWrapper::Message(action)));
+            // let mut current_operation = Some(Box::new(OperationWrapper::Message(action)));
 
             let mut user_interface = build_user_interface(
                 application,
@@ -2073,166 +2118,168 @@ where
                 auto_size_surfaces,
                 proxy,
             );
-            let mut ret = None;
+            // let mut ret = None;
 
-            while let Some(mut operation) = current_operation.take() {
-                user_interface.operate(
-                    renderer,
-                    &mut MapOperation {
-                        operation: operation.as_mut(),
-                    },
-                );
-
-                match operation.as_ref().finish() {
-                    Outcome::None => {
-                        ret = Some(operation);
-                    }
-                    Outcome::Some(message) => {
-                        match message {
-                            OperationOutputWrapper::Message(m) => {
-                                proxy.send_event(Event::SctkEvent(IcedSctkEvent::UserEvent(m)));
-                                ret = Some(operation)
-                            }
-                            operation::OperationOutputWrapper::Id(_) => {
-                                // should not happen
-                            }
-                        }
-                    }
-                    Outcome::Chain(next) => {
-                        current_operation = Some(Box::new(OperationWrapper::Wrapper(next)));
-                    }
-                }
-            }
+            // while let Some(mut operation) = current_operation.take() {
+            //     user_interface.operate(renderer, operation.as_mut());
+            //
+            //     match operation.as_ref().finish() {
+            //         operation::Outcome::None => {
+            //             ret = Some(operation);
+            //         }
+            //         operation::Outcome::Some(message) => {
+            //             match message {
+            //                 operation::OperationOutputWrapper::Message(m) => {
+            //                     proxy.send_event(Event::SctkEvent(IcedSctkEvent::UserEvent(m)));
+            //                     ret = Some(operation)
+            //                 }
+            //                 operation::OperationOutputWrapper::Id(_) => {
+            //                     // should not happen
+            //                 }
+            //             }
+            //         }
+            //         operation::Outcome::Chain(next) => {
+            //             current_operation = Some(Box::new(OperationWrapper::Wrapper(next)));
+            //         }
+            //     }
+            // }
 
             current_cache = user_interface.into_cache();
             *cache = current_cache;
-            return ret.and_then(|o| match *o {
-                OperationWrapper::Message(o) => Some(command::Action::Widget(o)),
-                _ => None,
-            });
+            // return ret.and_then(|o| match *o {
+            //     // OperationWrapper::Message(o) => Some(command::Action::Widget(o)),
+            //     _ => None,
+            // });
+            return None;
         }
-        // TODO qui dovrei prendere la custom action e gestirla
-        command::Action::Custom(custom) => {
-            if let Ok(action) = custom.downcast::<wayland::Action<A::Message>>() {
-                match *action {
-                    wayland::Action::LayerSurface(layer_surface_action) => {
-                        if let wayland::layer_surface::Action::LayerSurface {
-                            mut builder,
-                            _phantom,
-                        } = layer_surface_action
-                        {
-                            if builder.size.is_none() {
-                                let e = application.view(builder.id);
-                                let mut tree = Tree::new(e.as_widget());
-                                let node = Widget::layout(
-                                    e.as_widget(),
-                                    &mut tree,
-                                    renderer,
-                                    &builder.size_limits,
-                                );
-                                let bounds = node.bounds();
-                                let (w, h) = (
-                                    (bounds.width.ceil()).max(1.0) as u32,
-                                    (bounds.height.ceil()).max(1.0) as u32,
-                                );
-                                auto_size_surfaces.insert(
-                                    SurfaceIdWrapper::LayerSurface(builder.id),
-                                    (w, h, builder.size_limits, false),
-                                );
-                                builder.size =
-                                    Some((Some(bounds.width as u32), Some(bounds.height as u32)));
-                            }
-                            proxy.send_event(Event::LayerSurface(
-                                wayland::layer_surface::Action::LayerSurface { builder, _phantom },
-                            ));
-                        } else {
-                            proxy.send_event(Event::LayerSurface(layer_surface_action));
+        iced_runtime::command::Action::Custom(action) => {
+            let action = action
+                .downcast::<platform_specific::wayland::Action<<A as Program>::Message>>()
+                .unwrap();
+            match *action {
+                platform_specific::wayland::Action::LayerSurface(layer_surface_action) => {
+                    if let platform_specific::wayland::layer_surface::Action::LayerSurface {
+                        mut builder,
+                        _phantom,
+                    } = layer_surface_action
+                    {
+                        if builder.size.is_none() {
+                            let e = application.view(builder.id);
+                            let mut tree = Tree::new(e.as_widget());
+                            let node = Widget::layout(
+                                e.as_widget(),
+                                &mut tree,
+                                renderer,
+                                &builder.size_limits,
+                            );
+                            let bounds = node.bounds();
+                            let (w, h) = (
+                                (bounds.width.ceil()).max(1.0) as u32,
+                                (bounds.height.ceil()).max(1.0) as u32,
+                            );
+                            auto_size_surfaces.insert(
+                                SurfaceIdWrapper::LayerSurface(builder.id),
+                                (w, h, builder.size_limits, false),
+                            );
+                            builder.size =
+                                Some((Some(bounds.width as u32), Some(bounds.height as u32)));
                         }
-                    }
-                    wayland::Action::Window(window_action) => {
-                        if let wayland::window::Action::Window {
-                            mut builder,
-                            _phantom,
-                        } = window_action
-                        {
-                            if builder.autosize {
-                                let e = application.view(builder.window_id);
-                                let mut tree = Tree::new(e.as_widget());
-                                let node = Widget::layout(
-                                    e.as_widget(),
-                                    &mut tree,
-                                    renderer,
-                                    &builder.size_limits,
-                                );
-                                let bounds = node.bounds();
-                                let (w, h) = (
-                                    (bounds.width.ceil()).max(1.0) as u32,
-                                    (bounds.height.ceil()).max(1.0) as u32,
-                                );
-                                auto_size_surfaces.insert(
-                                    SurfaceIdWrapper::Window(builder.window_id),
-                                    (w, h, builder.size_limits, false),
-                                );
-                                builder.size = (bounds.width as u32, bounds.height as u32);
-                            }
-                            proxy.send_event(Event::Window(wayland::window::Action::Window {
+                        proxy.send_event(Event::LayerSurface(
+                            platform_specific::wayland::layer_surface::Action::LayerSurface {
                                 builder,
                                 _phantom,
-                            }));
-                        } else {
-                            proxy.send_event(Event::Window(window_action));
-                        }
-                    }
-                    wayland::Action::Popup(popup_action) => {
-                        if let popup::Action::Popup {
-                            mut popup,
-                            _phantom,
-                        } = popup_action
-                        {
-                            if popup.positioner.size.is_none() {
-                                let e = application.view(popup.id);
-                                let mut tree = Tree::new(e.as_widget());
-                                let node = Widget::layout(
-                                    e.as_widget(),
-                                    &mut tree,
-                                    renderer,
-                                    &popup.positioner.size_limits,
-                                );
-                                let bounds = node.bounds();
-                                let (w, h) = (
-                                    bounds.width.ceil().max(1.0) as u32,
-                                    bounds.height.ceil().max(1.0) as u32,
-                                );
-                                auto_size_surfaces.insert(
-                                    SurfaceIdWrapper::Popup(popup.id),
-                                    (w, h, popup.positioner.size_limits, false),
-                                );
-                                popup.positioner.size = Some((w, h));
-                            }
-                            proxy.send_event(Event::Popup(popup::Action::Popup {
-                                popup,
-                                _phantom: std::marker::PhantomData,
-                            }));
-                        } else {
-                            proxy.send_event(Event::Popup(popup_action));
-                        }
-                    }
-                    wayland::Action::DataDevice(data_device_action) => {
-                        proxy.send_event(Event::DataDevice(data_device_action));
-                    }
-                    wayland::Action::Activation(activation_action) => {
-                        proxy.send_event(Event::Activation(activation_action));
-                    }
-                    wayland::Action::SessionLock(session_lock_action) => {
-                        proxy.send_event(Event::SessionLock(session_lock_action));
+                            },
+                        ));
+                    } else {
+                        proxy.send_event(Event::LayerSurface(layer_surface_action));
                     }
                 }
+
+                platform_specific::wayland::Action::Window(window_action) => {
+                    if let platform_specific::wayland::window::Action::Window {
+                        mut builder,
+                        _phantom,
+                    } = window_action
+                    {
+                        if builder.autosize {
+                            let e = application.view(builder.window_id);
+                            let mut tree = Tree::new(e.as_widget());
+                            let node = Widget::layout(
+                                e.as_widget(),
+                                &mut tree,
+                                renderer,
+                                &builder.size_limits,
+                            );
+                            let bounds = node.bounds();
+                            let (w, h) = (
+                                (bounds.width.ceil()).max(1.0) as u32,
+                                (bounds.height.ceil()).max(1.0) as u32,
+                            );
+                            auto_size_surfaces.insert(
+                                SurfaceIdWrapper::Window(builder.window_id),
+                                (w, h, builder.size_limits, false),
+                            );
+                            builder.size = (bounds.width as u32, bounds.height as u32);
+                        }
+                        proxy.send_event(Event::Window(
+                            platform_specific::wayland::window::Action::Window {
+                                builder,
+                                _phantom,
+                            },
+                        ));
+                    } else {
+                        proxy.send_event(Event::Window(window_action));
+                    }
+                }
+
+                platform_specific::wayland::Action::Popup(popup_action) => {
+                    if let popup::Action::Popup {
+                        mut popup,
+                        _phantom,
+                    } = popup_action
+                    {
+                        if popup.positioner.size.is_none() {
+                            let e = application.view(popup.id);
+                            let mut tree = Tree::new(e.as_widget());
+                            let node = Widget::layout(
+                                e.as_widget(),
+                                &mut tree,
+                                renderer,
+                                &popup.positioner.size_limits,
+                            );
+                            let bounds = node.bounds();
+                            let (w, h) = (
+                                bounds.width.ceil().max(1.0) as u32,
+                                bounds.height.ceil().max(1.0) as u32,
+                            );
+                            auto_size_surfaces.insert(
+                                SurfaceIdWrapper::Popup(popup.id),
+                                (w, h, popup.positioner.size_limits, false),
+                            );
+                            popup.positioner.size = Some((w, h));
+                        }
+                        proxy.send_event(Event::Popup(popup::Action::Popup { popup, _phantom }));
+                    } else {
+                        proxy.send_event(Event::Popup(popup_action));
+                    }
+                }
+                platform_specific::wayland::Action::DataDevice(data_device_action) => {
+                    proxy.send_event(Event::DataDevice(data_device_action));
+                }
+                platform_specific::wayland::Action::Activation(activation_action) => {
+                    proxy.send_event(Event::Activation(activation_action));
+                }
+                platform_specific::wayland::Action::SessionLock(session_lock_action) => {
+                    proxy.send_event(Event::SessionLock(session_lock_action));
+                }
+                _ => {}
             }
         }
         _ => {}
     };
     None
 }
+
 pub fn build_user_interfaces<'a, A, C>(
     application: &'a A,
     renderer: &mut A::Renderer,
