@@ -7,6 +7,7 @@ edition = "2021"
 debug = ["iced_runtime/debug"]
 application = []
 clipboard = []
+no-hand-cursor = []
 
 [dependencies]
 iced_graphics = { version = "0.12.1" }

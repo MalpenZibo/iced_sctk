@@ -83,11 +83,20 @@ pub fn modifiers_to_native(mods: Modifiers) -> keyboard::Modifiers {
 pub(crate) fn cursor_icon(cursor: Interaction) -> CursorIcon {
     match cursor {
         Interaction::Idle => CursorIcon::Default,
+        #[cfg(feature = "no-hand-cursor")]
+        Interaction::Pointer => CursorIcon::Default,
+        #[cfg(not(feature = "no-hand-cursor"))]
         Interaction::Pointer => CursorIcon::Pointer,
+        #[cfg(feature = "no-hand-cursor")]
+        Interaction::Grab => CursorIcon::Default,
+        #[cfg(not(feature = "no-hand-cursor"))]
         Interaction::Grab => CursorIcon::Grab,
         Interaction::Text => CursorIcon::Text,
         Interaction::Crosshair => CursorIcon::Crosshair,
         Interaction::Working => CursorIcon::Progress,
+        #[cfg(feature = "no-hand-cursor")]
+        Interaction::Grabbing => CursorIcon::Default,
+        #[cfg(not(feature = "no-hand-cursor"))]
         Interaction::Grabbing => CursorIcon::Grabbing,
         Interaction::ResizingHorizontally => CursorIcon::EwResize,
         Interaction::ResizingVertically => CursorIcon::NsResize,
