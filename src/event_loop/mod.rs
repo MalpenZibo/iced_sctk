@@ -9,28 +9,29 @@ use crate::application::SurfaceIdWrapper;
 use crate::{
     application::Event,
     conversion,
-    dpi::LogicalSize,
+    dpi::{LogicalPosition, LogicalSize},
     handlers::{
-        activation::IcedRequestData,
-        wp_fractional_scaling::FractionalScalingManager,
+        activation::IcedRequestData, wp_fractional_scaling::FractionalScalingManager,
         wp_viewporter::ViewporterState,
     },
     sctk_event::{
-        DataSourceEvent, DndOfferEvent, IcedSctkEvent,
-        LayerSurfaceEventVariant, PopupEventVariant, SctkEvent, StartCause,
-        WindowEventVariant,
+        DataSourceEvent, DndOfferEvent, IcedSctkEvent, LayerSurfaceEventVariant, PopupEventVariant,
+        SctkEvent, StartCause, WindowEventVariant,
     },
     settings,
     subsurface_widget::SubsurfaceState,
 };
-use iced_futures::core::window::Mode;
-use crate::command::platform_specific::{
-    self,
-    wayland::{
-        data_device::DndIcon, layer_surface::SctkLayerSurfaceSettings,
-        window::SctkWindowSettings,
+use crate::{
+    command::platform_specific::{
+        self,
+        wayland::{
+            data_device::DndIcon, layer_surface::SctkLayerSurfaceSettings,
+            window::SctkWindowSettings,
+        },
     },
+    dpi::PhysicalPosition,
 };
+use iced_futures::core::window::Mode;
 use sctk::{
     activation::{ActivationState, RequestData},
     compositor::CompositorState,
@@ -40,8 +41,8 @@ use sctk::{
     reexports::{
         calloop::{self, EventLoop, PostAction},
         client::{
-            globals::registry_queue_init, protocol::wl_surface::WlSurface,
-            ConnectError, Connection, DispatchError, Proxy,
+            globals::registry_queue_init, protocol::wl_surface::WlSurface, ConnectError,
+            Connection, DispatchError, Proxy,
         },
     },
     registry::RegistryState,
@@ -51,8 +52,7 @@ use sctk::{
     shm::Shm,
 };
 use sctk::{
-    data_device_manager::data_source::DragSource,
-    reexports::calloop_wayland_source::WaylandSource,
+    data_device_manager::data_source::DragSource, reexports::calloop_wayland_source::WaylandSource,
 };
 #[cfg(feature = "a11y")]
 use std::sync::{Arc, Mutex};
@@ -97,9 +97,7 @@ impl<T> SctkEventLoop<T>
 where
     T: 'static + Debug,
 {
-    pub(crate) fn new<F: Sized>(
-        _settings: &settings::Settings<F>,
-    ) -> Result<Self, ConnectError> {
+    pub(crate) fn new<F: Sized>(_settings: &settings::Settings<F>) -> Result<Self, ConnectError> {
         let connection = Connection::connect_to_env()?;
         let _display = connection.display();
         let (globals, event_queue) = registry_queue_init(&connection).unwrap();
@@ -118,8 +116,7 @@ where
                 // shim::handle_window_requests(state);
             })
             .unwrap();
-        let (user_events_sender, user_events_channel) =
-            calloop::channel::channel();
+        let (user_events_sender, user_events_channel) = calloop::channel::channel();
 
         loop_handle
             .insert_source(user_events_channel, |event, _, state| match event {
@@ -129,13 +126,12 @@ where
                 calloop::channel::Event::Closed => {}
             })
             .unwrap();
-        let wayland_source =
-            WaylandSource::new(connection.clone(), event_queue);
+        let wayland_source = WaylandSource::new(connection.clone(), event_queue);
 
-        let wayland_dispatcher = calloop::Dispatcher::new(
-            wayland_source,
-            |_, queue, winit_state| queue.dispatch_pending(winit_state),
-        );
+        let wayland_dispatcher =
+            calloop::Dispatcher::new(wayland_source, |_, queue, winit_state| {
+                queue.dispatch_pending(winit_state)
+            });
 
         let _wayland_source_dispatcher = event_loop
             .handle()
@@ -145,24 +141,17 @@ where
         let (viewporter_state, fractional_scaling_manager) =
             match FractionalScalingManager::new(&globals, &qh) {
                 Ok(m) => {
-                    let viewporter_state =
-                        match ViewporterState::new(&globals, &qh) {
-                            Ok(s) => Some(s),
-                            Err(e) => {
-                                error!(
-                                    "Failed to initialize viewporter: {}",
-                                    e
-                                );
-                                None
-                            }
-                        };
+                    let viewporter_state = match ViewporterState::new(&globals, &qh) {
+                        Ok(s) => Some(s),
+                        Err(e) => {
+                            error!("Failed to initialize viewporter: {}", e);
+                            None
+                        }
+                    };
                     (viewporter_state, Some(m))
                 }
                 Err(e) => {
-                    error!(
-                        "Failed to initialize fractional scaling manager: {}",
-                        e
-                    );
+                    error!("Failed to initialize fractional scaling manager: {}", e);
                     (None, None)
                 }
             };
@@ -177,15 +166,11 @@ where
                 output_state: OutputState::new(&globals, &qh),
                 compositor_state: CompositorState::bind(&globals, &qh)
                     .expect("wl_compositor is not available"),
-                shm_state: Shm::bind(&globals, &qh)
-                    .expect("wl_shm is not available"),
-                xdg_shell_state: XdgShell::bind(&globals, &qh)
-                    .expect("xdg shell is not available"),
+                shm_state: Shm::bind(&globals, &qh).expect("wl_shm is not available"),
+                xdg_shell_state: XdgShell::bind(&globals, &qh).expect("xdg shell is not available"),
                 layer_shell: LayerShell::bind(&globals, &qh).ok(),
-                data_device_manager_state: DataDeviceManagerState::bind(
-                    &globals, &qh,
-                )
-                .expect("data device manager is not available"),
+                data_device_manager_state: DataDeviceManagerState::bind(&globals, &qh)
+                    .expect("data device manager is not available"),
                 activation_state: ActivationState::bind(&globals, &qh).ok(),
                 session_lock_state: SessionLockState::new(&globals, &qh),
                 session_lock: None,
@@ -229,8 +214,7 @@ where
     pub fn get_layer_surface(
         &mut self,
         layer_surface: SctkLayerSurfaceSettings,
-    ) -> Result<(iced_core::window::Id, WlSurface), LayerSurfaceCreationError>
-    {
+    ) -> Result<(iced_core::window::Id, WlSurface), LayerSurfaceCreationError> {
         self.state.get_layer_surface(layer_surface)
     }
 
@@ -251,9 +235,7 @@ where
         _role: iced_accessibility::accesskit::Role,
     ) -> adapter::IcedSctkAdapter {
         use iced_accessibility::{
-            accesskit::{
-                NodeBuilder, NodeClassSet, NodeId, Role, Tree, TreeUpdate,
-            },
+            accesskit::{NodeBuilder, NodeClassSet, NodeId, Role, Tree, TreeUpdate},
             accesskit_unix::Adapter,
             window_node_id,
         };
@@ -292,6 +274,7 @@ where
         F: FnMut(IcedSctkEvent<T>, &SctkState<T>, &mut ControlFlow),
     {
         let mut control_flow = ControlFlow::Poll;
+        let mut cursor_position = HashMap::<_, LogicalPosition<f64>>::new();
 
         callback(
             IcedSctkEvent::NewEvents(StartCause::Init),
@@ -305,16 +288,14 @@ where
             .registry_state
             .bind_one(&self.state.queue_handle, 1..=6, GlobalData)
             .unwrap();
-        let wl_subcompositor = self.state.registry_state.bind_one(
-            &self.state.queue_handle,
-            1..=1,
-            GlobalData,
-        );
-        let wp_viewporter = self.state.registry_state.bind_one(
-            &self.state.queue_handle,
-            1..=1,
-            GlobalData,
-        );
+        let wl_subcompositor =
+            self.state
+                .registry_state
+                .bind_one(&self.state.queue_handle, 1..=1, GlobalData);
+        let wp_viewporter =
+            self.state
+                .registry_state
+                .bind_one(&self.state.queue_handle, 1..=1, GlobalData);
         let wl_shm = self
             .state
             .registry_state
@@ -348,9 +329,7 @@ where
                     &mut control_flow,
                 );
             } else {
-                tracing::warn!(
-                    "No `wp_viewporter`. Subsurfaces not supported."
-                );
+                tracing::warn!("No `wp_viewporter`. Subsurfaces not supported.");
             }
         } else {
             tracing::warn!("No `wl_subcompositor`. Subsurfaces not supported.");
@@ -387,8 +366,7 @@ where
             // woken up by messages arriving from the Wayland socket, to avoid delaying the
             // dispatch of these events until we're woken up again.
             let instant_wakeup = {
-                let mut wayland_source =
-                    self.wayland_dispatcher.as_source_mut();
+                let mut wayland_source = self.wayland_dispatcher.as_source_mut();
                 let queue = wayland_source.queue();
                 match queue.dispatch_pending(&mut self.state) {
                     Ok(dispatched) => dispatched > 0,
@@ -411,9 +389,7 @@ where
                 ControlFlow::Poll => {
                     // Non-blocking dispatch.
                     let timeout = Duration::from_millis(0);
-                    if let Err(error) =
-                        self.event_loop.dispatch(Some(timeout), &mut self.state)
-                    {
+                    if let Err(error) = self.event_loop.dispatch(Some(timeout), &mut self.state) {
                         break raw_os_err(error);
                     }
 
@@ -430,9 +406,7 @@ where
                         None
                     };
 
-                    if let Err(error) =
-                        self.event_loop.dispatch(timeout, &mut self.state)
-                    {
+                    if let Err(error) = self.event_loop.dispatch(timeout, &mut self.state) {
                         break raw_os_err(error);
                     }
 
@@ -455,10 +429,7 @@ where
                         Duration::from_millis(0)
                     };
 
-                    if let Err(error) = self
-                        .event_loop
-                        .dispatch(Some(duration), &mut self.state)
-                    {
+                    if let Err(error) = self.event_loop.dispatch(Some(duration), &mut self.state) {
                         break raw_os_err(error);
                     }
 
@@ -466,23 +437,19 @@ where
 
                     if now < deadline {
                         callback(
-                            IcedSctkEvent::NewEvents(
-                                StartCause::WaitCancelled {
-                                    start,
-                                    requested_resume: Some(deadline),
-                                },
-                            ),
+                            IcedSctkEvent::NewEvents(StartCause::WaitCancelled {
+                                start,
+                                requested_resume: Some(deadline),
+                            }),
                             &self.state,
                             &mut control_flow,
                         )
                     } else {
                         callback(
-                            IcedSctkEvent::NewEvents(
-                                StartCause::ResumeTimeReached {
-                                    start,
-                                    requested_resume: deadline,
-                                },
-                            ),
+                            IcedSctkEvent::NewEvents(StartCause::ResumeTimeReached {
+                                start,
+                                requested_resume: deadline,
+                            }),
                             &self.state,
                             &mut control_flow,
                         )
@@ -499,8 +466,7 @@ where
             for event in compositor_event_back_buffer.drain(..) {
                 let forward_event = match &event {
                     SctkEvent::LayerSurfaceEvent {
-                        variant:
-                            LayerSurfaceEventVariant::ScaleFactorChanged(..),
+                        variant: LayerSurfaceEventVariant::ScaleFactorChanged(..),
                         ..
                     }
                     | SctkEvent::PopupEvent {
@@ -513,10 +479,7 @@ where
                     } => true,
                     // ignore other events that shouldn't be in this buffer
                     event => {
-                        tracing::warn!(
-                            "Unhandled compositor event: {:?}",
-                            event
-                        );
+                        tracing::warn!("Unhandled compositor event: {:?}", event);
                         false
                     }
                 };
@@ -530,10 +493,7 @@ where
                 }
             }
 
-            std::mem::swap(
-                &mut frame_event_back_buffer,
-                &mut self.state.frame_events,
-            );
+            std::mem::swap(&mut frame_event_back_buffer, &mut self.state.frame_events);
 
             for event in frame_event_back_buffer.drain(..) {
                 sticky_exit_callback(
@@ -563,20 +523,26 @@ where
                             &mut control_flow,
                             &mut callback,
                         ),
-                        adapter::A11yWrapper::Event(event) => {
-                            sticky_exit_callback(
-                                IcedSctkEvent::A11yEvent(event),
-                                &self.state,
-                                &mut control_flow,
-                                &mut callback,
-                            )
-                        }
+                        adapter::A11yWrapper::Event(event) => sticky_exit_callback(
+                            IcedSctkEvent::A11yEvent(event),
+                            &self.state,
+                            &mut control_flow,
+                            &mut callback,
+                        ),
                     }
                 }
             }
             // Handle pending sctk events.
             for event in sctk_event_sink_back_buffer.drain(..) {
                 match event {
+                    SctkEvent::PointerEvent { ref variant, .. } => {
+                        let surface_id = variant.surface.id();
+
+                        cursor_position.insert(
+                            surface_id,
+                            LogicalPosition::new(variant.position.0, variant.position.1),
+                        );
+                    }
                     SctkEvent::PopupEvent {
                         variant: PopupEventVariant::Done,
                         toplevel_id,
@@ -592,76 +558,82 @@ where
                             Some(p) => {
                                 let _p = self.state.popups.remove(p);
                                 sticky_exit_callback(
-                                    IcedSctkEvent::SctkEvent(
-                                        SctkEvent::PopupEvent {
-                                            variant: PopupEventVariant::Done,
-                                            toplevel_id,
-                                            parent_id,
-                                            id,
-                                        },
-                                    ),
+                                    IcedSctkEvent::SctkEvent(SctkEvent::PopupEvent {
+                                        variant: PopupEventVariant::Done,
+                                        toplevel_id,
+                                        parent_id,
+                                        id,
+                                    }),
                                     &self.state,
                                     &mut control_flow,
                                     &mut callback,
                                 );
                             }
-                            None => continue,
+                            None => (),
                         };
+
+                        continue;
                     }
                     SctkEvent::LayerSurfaceEvent {
                         variant: LayerSurfaceEventVariant::Done,
                         id,
                     } => {
-                        if let Some(i) =
-                            self.state.layer_surfaces.iter().position(|l| {
-                                l.surface.wl_surface().id() == id.id()
-                            })
+                        cursor_position.remove(&id.id());
+
+                        if let Some(i) = self
+                            .state
+                            .layer_surfaces
+                            .iter()
+                            .position(|l| l.surface.wl_surface().id() == id.id())
                         {
                             let _l = self.state.layer_surfaces.remove(i);
                             sticky_exit_callback(
-                                IcedSctkEvent::SctkEvent(
-                                    SctkEvent::LayerSurfaceEvent {
-                                        variant: LayerSurfaceEventVariant::Done,
-                                        id,
-                                    },
-                                ),
+                                IcedSctkEvent::SctkEvent(SctkEvent::LayerSurfaceEvent {
+                                    variant: LayerSurfaceEventVariant::Done,
+                                    id,
+                                }),
                                 &self.state,
                                 &mut control_flow,
                                 &mut callback,
                             );
                         }
+
+                        continue;
                     }
                     SctkEvent::WindowEvent {
                         variant: WindowEventVariant::Close,
                         id,
                     } => {
-                        if let Some(i) =
-                            self.state.windows.iter().position(|l| {
-                                l.window.wl_surface().id() == id.id()
-                            })
+                        if let Some(i) = self
+                            .state
+                            .windows
+                            .iter()
+                            .position(|l| l.window.wl_surface().id() == id.id())
                         {
                             let w = self.state.windows.remove(i);
                             w.window.xdg_toplevel().destroy();
                             sticky_exit_callback(
-                                IcedSctkEvent::SctkEvent(
-                                    SctkEvent::WindowEvent {
-                                        variant: WindowEventVariant::Close,
-                                        id,
-                                    },
-                                ),
+                                IcedSctkEvent::SctkEvent(SctkEvent::WindowEvent {
+                                    variant: WindowEventVariant::Close,
+                                    id,
+                                }),
                                 &self.state,
                                 &mut control_flow,
                                 &mut callback,
                             );
                         }
+
+                        continue;
                     }
-                    _ => sticky_exit_callback(
-                        IcedSctkEvent::SctkEvent(event),
-                        &self.state,
-                        &mut control_flow,
-                        &mut callback,
-                    ),
+                    _ => (),
                 }
+
+                sticky_exit_callback(
+                    IcedSctkEvent::SctkEvent(event),
+                    &self.state,
+                    &mut control_flow,
+                    &mut callback,
+                )
             }
 
             // handle events indirectly via callback to the user.
@@ -672,8 +644,7 @@ where
                 .partition(|e| matches!(e, Event::SctkEvent(_)));
             let mut to_commit = HashMap::new();
             let mut pending_redraws = Vec::new();
-            for event in sctk_events.into_iter().chain(user_events.into_iter())
-            {
+            for event in sctk_events.into_iter().chain(user_events.into_iter()) {
                 match event {
                     Event::Message(m) => {
                         sticky_exit_callback(
@@ -937,7 +908,21 @@ where
                                 }
                             }
                         },
-                        platform_specific::wayland::window::Action::ShowWindowMenu { id: _, x: _, y: _ } => todo!(),
+                        platform_specific::wayland::window::Action::ShowWindowMenu { id } => {
+                            if let (Some(window), Some((seat, last_press))) = (self.state.windows.iter_mut().find(|w| w.id == id), self.state.seats.first().and_then(|seat| seat.last_ptr_press.map(|p| (&seat.seat, p.2)))) {
+                                let surface_id = window.window.wl_surface().id();
+
+                                let cursor_position = cursor_position.get(&surface_id)
+                                    .cloned()
+                                    .unwrap_or_default();
+
+                                // Cursor position does not need to be scaled here.
+                                let PhysicalPosition { x, y } = cursor_position.to_physical::<i32>(1.0);
+
+                                window.window.xdg_toplevel().show_window_menu(seat, last_press, x as i32, y as i32);
+                                to_commit.insert(id, window.window.wl_surface().clone());
+                            }
+                        },
                         platform_specific::wayland::window::Action::Destroy(id) => {
                             if let Some(i) = self.state.windows.iter().position(|l| l.id == id) {
                                 let window = self.state.windows.remove(i);

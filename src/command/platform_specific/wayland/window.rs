@@ -157,10 +157,6 @@ pub enum Action<T> {
     ShowWindowMenu {
         /// id of the window
         id: Id,
-        /// x location of popup
-        x: i32,
-        /// y location of popup
-        y: i32,
     },
     /// Set the mode of the window
     Mode(Id, Mode),
@@ -175,10 +171,7 @@ pub enum Action<T> {
 
 impl<T> Action<T> {
     /// Maps the output of a window [`Action`] using the provided closure.
-    pub fn map<A>(
-        self,
-        _: impl Fn(T) -> A + 'static + MaybeSend + Sync,
-    ) -> Action<A>
+    pub fn map<A>(self, _: impl Fn(T) -> A + 'static + MaybeSend + Sync) -> Action<A>
     where
         T: 'static,
     {
@@ -187,9 +180,7 @@ impl<T> Action<T> {
                 builder,
                 _phantom: PhantomData,
             },
-            Action::Size { id, width, height } => {
-                Action::Size { id, width, height }
-            }
+            Action::Size { id, width, height } => Action::Size { id, width, height },
             Action::MinSize { id, size } => Action::MinSize { id, size },
             Action::MaxSize { id, size } => Action::MaxSize { id, size },
             Action::Title { id, title } => Action::Title { id, title },
@@ -199,12 +190,8 @@ impl<T> Action<T> {
             Action::Fullscreen { id } => Action::Fullscreen { id },
             Action::UnsetFullscreen { id } => Action::UnsetFullscreen { id },
             Action::InteractiveMove { id } => Action::InteractiveMove { id },
-            Action::ShowWindowMenu { id, x, y } => {
-                Action::ShowWindowMenu { id, x, y }
-            }
-            Action::InteractiveResize { id, edge } => {
-                Action::InteractiveResize { id, edge }
-            }
+            Action::ShowWindowMenu { id } => Action::ShowWindowMenu { id },
+            Action::InteractiveResize { id, edge } => Action::InteractiveResize { id, edge },
             Action::Destroy(id) => Action::Destroy(id),
             Action::Mode(id, m) => Action::Mode(id, m),
             Action::ToggleMaximized { id } => Action::ToggleMaximized { id },
@@ -242,66 +229,36 @@ impl<T> fmt::Debug for Action<T> {
                 "Action::Window::Title {{ id: {:?}, title: {:?} }}",
                 id, title
             ),
-            Action::Minimize { id } => write!(
-                f,
-                "Action::Window::Minimize {{ id: {:?} }}",
-                id
-            ),
-            Action::Maximize { id } => write!(
-                f,
-                "Action::Window::Maximize {{ id: {:?} }}",
-                id
-            ),
-            Action::UnsetMaximize { id } => write!(
-                f,
-                "Action::Window::UnsetMaximize {{ id: {:?} }}",
-                id
-            ),
-            Action::Fullscreen { id } => write!(
-                f,
-                "Action::Window::Fullscreen {{ id: {:?} }}",
-                id
-            ),
-            Action::UnsetFullscreen { id } => write!(
-                f,
-                "Action::Window::UnsetFullscreen {{ id: {:?} }}",
-                id
-            ),
-            Action::InteractiveMove { id } => write!(
-                f,
-                "Action::Window::InteractiveMove {{ id: {:?} }}",
-                id
-            ),
-            Action::ShowWindowMenu { id, x, y } => write!(
-                f,
-                "Action::Window::ShowWindowMenu {{ id: {:?}, x: {x}, y: {y} }}",
-                id
-            ),
+            Action::Minimize { id } => write!(f, "Action::Window::Minimize {{ id: {:?} }}", id),
+            Action::Maximize { id } => write!(f, "Action::Window::Maximize {{ id: {:?} }}", id),
+            Action::UnsetMaximize { id } => {
+                write!(f, "Action::Window::UnsetMaximize {{ id: {:?} }}", id)
+            }
+            Action::Fullscreen { id } => write!(f, "Action::Window::Fullscreen {{ id: {:?} }}", id),
+            Action::UnsetFullscreen { id } => {
+                write!(f, "Action::Window::UnsetFullscreen {{ id: {:?} }}", id)
+            }
+            Action::InteractiveMove { id } => {
+                write!(f, "Action::Window::InteractiveMove {{ id: {:?} }}", id)
+            }
+            Action::ShowWindowMenu { id } => {
+                write!(f, "Action::Window::ShowWindowMenu {{ id: {:?} }}", id)
+            }
             Action::InteractiveResize { id, edge } => write!(
                 f,
                 "Action::Window::InteractiveResize {{ id: {:?}, edge: {:?} }}",
                 id, edge
             ),
-            Action::Destroy(id) => write!(
-                f,
-                "Action::Window::Destroy {{ id: {:?} }}",
-                id
-            ),
-            Action::Mode(id, m) => write!(
-                f,
-                "Action::Window::Mode {{ id: {:?}, mode: {:?} }}",
-                id, m
-            ),
-            Action::ToggleMaximized { id } => write!(
-                f,
-                "Action::Window::Maximized {{ id: {:?} }}",
-                id
-            ),
-            Action::ToggleFullscreen { id } => write!(
-                f,
-                "Action::Window::ToggleFullscreen {{ id: {:?} }}",
-                id
-            ),
+            Action::Destroy(id) => write!(f, "Action::Window::Destroy {{ id: {:?} }}", id),
+            Action::Mode(id, m) => {
+                write!(f, "Action::Window::Mode {{ id: {:?}, mode: {:?} }}", id, m)
+            }
+            Action::ToggleMaximized { id } => {
+                write!(f, "Action::Window::Maximized {{ id: {:?} }}", id)
+            }
+            Action::ToggleFullscreen { id } => {
+                write!(f, "Action::Window::ToggleFullscreen {{ id: {:?} }}", id)
+            }
             Action::AppId { id, app_id } => write!(
                 f,
                 "Action::Window::Mode {{ id: {:?}, app_id: {:?} }}",
@@ -342,9 +299,7 @@ impl<T> TryFrom<iced_runtime::window::Action<T>> for Action<T> {
                         settings.size.width.round() as u32,
                         settings.size.height.round() as u32,
                     ),
-                    resizable: settings
-                        .resizable
-                        .then_some(4.),
+                    resizable: settings.resizable.then_some(4.),
                     client_decorations: !settings.decorations,
                     transparent: settings.transparent,
                     xdg_activation_token: None,
@@ -389,9 +344,7 @@ impl<T> TryFrom<iced_runtime::window::Action<T>> for Action<T> {
                     Err(Error::NotSupported)
                 }
             }
-            iced_runtime::window::Action::ChangeMode(id, mode) => {
-                Ok(Action::Mode(id, mode.into()))
-            }
+            iced_runtime::window::Action::ChangeMode(id, mode) => Ok(Action::Mode(id, mode.into())),
             _ => Err(Error::NotSupported),
         }
     }

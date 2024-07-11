@@ -26,5 +26,3 @@ pub use iced_graphics::Viewport;
 pub use iced_runtime as runtime;
 pub use iced_runtime::core;
 pub use settings::Settings;
-
-pub use iced;
