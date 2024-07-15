@@ -990,7 +990,7 @@ where
 
                 // just draw here immediately and never again for dnd icons
                 // TODO handle scale factor?
-                let _new_mouse_interaction = user_interface.draw(
+                let new_mouse_interaction = user_interface.draw(
                     &mut renderer,
                     state.theme(),
                     &Style {
@@ -1000,6 +1000,13 @@ where
                     },
                     state.cursor(),
                 );
+
+                mouse_interaction = new_mouse_interaction;
+                ev_proxy.send_event(Event::SetCursor(mouse_interaction));
+                // Pre-emptively remove cursor focus from other surface so they won't set cursor
+                for state in states.values_mut() {
+                    state.cursor_position = None;
+                }
 
                 let subsurfaces = crate::subsurface_widget::take_subsurfaces();
                 if let Some(subsurface_state) = subsurface_state.as_mut() {
@@ -1453,7 +1460,10 @@ where
                     }
 
                     debug.draw_finished();
-                    if new_mouse_interaction != mouse_interaction {
+                    // Set cursor if mouse interaction has changed, and surface has pointer focus
+                    if state.cursor_position.is_some()
+                        && new_mouse_interaction != mouse_interaction
+                    {
                         mouse_interaction = new_mouse_interaction;
                         ev_proxy.send_event(Event::SetCursor(mouse_interaction));
                     }

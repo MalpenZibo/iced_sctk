@@ -779,11 +779,11 @@ where
                         },
                     },
                     Event::SetCursor(iced_icon) => {
-                        if let Some(ptr) = self.state.seats.get(0).and_then(|s| s.ptr.as_ref()) {
+                        if let Some(seat) = self.state.seats.get_mut(0) {
                             let icon = conversion::cursor_icon(iced_icon);
-                            let _ = ptr.set_cursor(self.wayland_dispatcher.as_source_ref().connection(), icon);
+                            seat.icon = Some(icon);
+                            seat.set_cursor(self.wayland_dispatcher.as_source_ref().connection(), icon);
                         }
-
                     }
                     Event::Window(action) => match action {
                         platform_specific::wayland::window::Action::Window { builder, _phantom } => {
