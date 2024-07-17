@@ -1,27 +1,25 @@
 use crate::{
-    application::SurfaceIdWrapper, command::platform_specific::wayland::data_device::DndIcon, conversion::{
-        modifiers_to_native, pointer_axis_to_native, pointer_button_to_native,
-    }, dpi::PhysicalSize, keymap::{self, keysym_to_key}, subsurface_widget::SubsurfaceState
+    application::SurfaceIdWrapper,
+    command::platform_specific::wayland::data_device::DndIcon,
+    conversion::{modifiers_to_native, pointer_axis_to_native, pointer_button_to_native},
+    dpi::PhysicalSize,
+    keymap::{self, keysym_to_key},
+    subsurface_widget::SubsurfaceState,
 };
 
-use iced_futures::core::event::{
-    // wayland::{LayerEvent, PopupEvent, SessionLockEvent},
-    // PlatformSpecific,
-};
+use iced_core::window::Id as SurfaceId;
 use iced_runtime::{
     // command::platform_specific::wayland::data_device::DndIcon,
     core::{/* event::wayland, */ keyboard, mouse, touch, window, Point},
     keyboard::{key, Key, Location},
 };
-use iced_core::window::Id as SurfaceId;
 use sctk::{
     output::OutputInfo,
     reexports::client::{
         backend::ObjectId,
         protocol::{
-            wl_data_device_manager::DndAction, wl_keyboard::WlKeyboard,
-            wl_output::WlOutput, wl_pointer::WlPointer, wl_seat::WlSeat,
-            wl_surface::WlSurface, wl_touch::WlTouch,
+            wl_data_device_manager::DndAction, wl_keyboard::WlKeyboard, wl_output::WlOutput,
+            wl_pointer::WlPointer, wl_seat::WlSeat, wl_surface::WlSurface, wl_touch::WlTouch,
         },
         Proxy,
     },
@@ -37,7 +35,7 @@ use sctk::{
         xdg::{popup::PopupConfigure, window::WindowConfigure},
     },
 };
-use std::{collections::HashMap, time::Instant};
+use std::{collections::HashMap, num::NonZeroU32, time::Instant};
 use wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use xkeysym::Keysym;
 
@@ -305,9 +303,8 @@ pub enum WindowEventVariant {
         width: u32,
         height: u32,
     },
-    /// <https://wayland.app/protocols/xdg-shell#xdg_toplevel:event:configure>
-    Configure(WindowConfigure, WlSurface, bool),
-
+    Configure((NonZeroU32, NonZeroU32), WindowConfigure, WlSurface, bool),
+    Size((NonZeroU32, NonZeroU32), WlSurface, bool),
     /// window state changed
     StateChanged(sctk::reexports::csd_frame::WindowState),
     /// Scale Factor
@@ -410,9 +407,7 @@ impl SctkEvent {
                     )]
                 }
                 PointerEventKind::Leave { .. } => {
-                    vec![iced_runtime::core::Event::Mouse(
-                        mouse::Event::CursorLeft,
-                    )]
+                    vec![iced_runtime::core::Event::Mouse(mouse::Event::CursorLeft)]
                 }
                 PointerEventKind::Motion { .. } => {
                     let offset = if let Some((x_offset, y_offset, _)) =
@@ -436,11 +431,7 @@ impl SctkEvent {
                     button,
                     serial: _,
                 } => pointer_button_to_native(button)
-                    .map(|b| {
-                        iced_runtime::core::Event::Mouse(
-                            mouse::Event::ButtonPressed(b),
-                        )
-                    })
+                    .map(|b| iced_runtime::core::Event::Mouse(mouse::Event::ButtonPressed(b)))
                     .into_iter()
                     .collect(), // TODO Ashley: conversion
                 PointerEventKind::Release {
@@ -448,11 +439,7 @@ impl SctkEvent {
                     button,
                     serial: _,
                 } => pointer_button_to_native(button)
-                    .map(|b| {
-                        iced_runtime::core::Event::Mouse(
-                            mouse::Event::ButtonReleased(b),
-                        )
-                    })
+                    .map(|b| iced_runtime::core::Event::Mouse(mouse::Event::ButtonReleased(b)))
                     .into_iter()
                     .collect(), // TODO Ashley: conversion
                 PointerEventKind::Axis {
@@ -462,9 +449,7 @@ impl SctkEvent {
                     source,
                 } => pointer_axis_to_native(source, horizontal, vertical)
                     .map(|a| {
-                        iced_runtime::core::Event::Mouse(
-                            mouse::Event::WheelScrolled { delta: a },
-                        )
+                        iced_runtime::core::Event::Mouse(mouse::Event::WheelScrolled { delta: a })
                     })
                     .into_iter()
                     .collect(), // TODO Ashley: conversion
@@ -473,168 +458,160 @@ impl SctkEvent {
                 variant,
                 kbd_id: _,
                 seat_id,
-            } => match variant {
-                KeyboardEventVariant::Leave(surface) => surface_ids
-                    .get(&surface.id())
-                    .and_then(|id| match id {
-                        SurfaceIdWrapper::LayerSurface(_id) => {
-                            // Some(iced_runtime::core::Event::PlatformSpecific(
-                            //     PlatformSpecific::Wayland(
-                            //         wayland::Event::Layer(
-                            //             LayerEvent::Unfocused,
-                            //             surface,
-                            //             id.inner(),
-                            //         ),
-                            //     ),
-                            // ))
-                            None
-                        }
-                        SurfaceIdWrapper::Window(id) => {
-                            Some(iced_runtime::core::Event::Window(
-                                *id,
-                                window::Event::Unfocused,
-                            ))
-                        }
-                        SurfaceIdWrapper::Popup(_id) => {
-                            // Some(iced_runtime::core::Event::PlatformSpecific(
-                            //     PlatformSpecific::Wayland(
-                            //         wayland::Event::Popup(
-                            //             PopupEvent::Unfocused,
-                            //             surface,
-                            //             id.inner(),
-                            //         ),
-                            //     ),
-                            // ))
-                            None
-                        }
-                        SurfaceIdWrapper::Dnd(_) => None,
-                        SurfaceIdWrapper::SessionLock(_) => {
-                            // Some(iced_runtime::core::Event::PlatformSpecific(
-                            //     PlatformSpecific::Wayland(
-                            //         wayland::Event::SessionLock(
-                            //             SessionLockEvent::Unfocused(
-                            //                 surface,
-                            //                 id.inner(),
-                            //             ),
-                            //         ),
-                            //     ),
-                            // ))
-                            None
-                        }
-                    })
-                    .into_iter()
-                    // .chain([iced_runtime::core::Event::PlatformSpecific(
-                    //     PlatformSpecific::Wayland(wayland::Event::Seat(
-                    //         wayland::SeatEvent::Leave,
-                    //         seat_id,
-                    //     )),
-                    // )])
-                    .collect(),
-                KeyboardEventVariant::Enter(surface) => surface_ids
-                    .get(&surface.id())
-                    .and_then(|id| match id {
-                        SurfaceIdWrapper::LayerSurface(_id) => {
-                            // Some(iced_runtime::core::Event::PlatformSpecific(
-                            //     PlatformSpecific::Wayland(
-                            //         wayland::Event::Layer(
-                            //             LayerEvent::Focused,
-                            //             surface,
-                            //             id.inner(),
-                            //         ),
-                            //     ),
-                            // ))
-                            None
-                        }
-                        SurfaceIdWrapper::Window(id) => {
-                            Some(iced_runtime::core::Event::Window(
-                                *id,
-                                window::Event::Focused,
-                            ))
-                        }
-                        SurfaceIdWrapper::Popup(_id) => {
-                            // Some(iced_runtime::core::Event::PlatformSpecific(
-                            //     PlatformSpecific::Wayland(
-                            //         wayland::Event::Popup(
-                            //             PopupEvent::Focused,
-                            //             surface,
-                            //             id.inner(),
-                            //         ),
-                            //     ),
-                            // ))
-                            None
-                        }
-                        SurfaceIdWrapper::Dnd(_) => None,
-                        SurfaceIdWrapper::SessionLock(_) => {
-                            // Some(iced_runtime::core::Event::PlatformSpecific(
-                            //     PlatformSpecific::Wayland(
-                            //         wayland::Event::SessionLock(
-                            //             SessionLockEvent::Focused(
-                            //                 surface,
-                            //                 id.inner(),
-                            //             ),
-                            //         ),
-                            //     ),
-                            // ))
-                            None
-                        }
-                    })
-                    .into_iter()
-                    // .chain([iced_runtime::core::Event::PlatformSpecific(
-                    //     PlatformSpecific::Wayland(wayland::Event::Seat(
-                    //         wayland::SeatEvent::Enter,
-                    //         seat_id,
-                    //     )),
-                    // )])
-                    .collect(),
-                KeyboardEventVariant::Press(ke) => {
-                    let (key, location) = keysym_to_vkey_location(ke.keysym);
-                    Some(iced_runtime::core::Event::Keyboard(
-                        keyboard::Event::KeyPressed {
-                            key: key,
-                            location: location,
-                            text: ke.utf8.map(|s| s.into()),
-                            modifiers: modifiers_to_native(*modifiers),
-                        },
-                    ))
-                    .into_iter()
-                    .collect()
+            } => {
+                match variant {
+                    KeyboardEventVariant::Leave(surface) => surface_ids
+                        .get(&surface.id())
+                        .and_then(|id| match id {
+                            SurfaceIdWrapper::LayerSurface(_id) => {
+                                // Some(iced_runtime::core::Event::PlatformSpecific(
+                                //     PlatformSpecific::Wayland(
+                                //         wayland::Event::Layer(
+                                //             LayerEvent::Unfocused,
+                                //             surface,
+                                //             id.inner(),
+                                //         ),
+                                //     ),
+                                // ))
+                                None
+                            }
+                            SurfaceIdWrapper::Window(id) => Some(
+                                iced_runtime::core::Event::Window(*id, window::Event::Unfocused),
+                            ),
+                            SurfaceIdWrapper::Popup(_id) => {
+                                // Some(iced_runtime::core::Event::PlatformSpecific(
+                                //     PlatformSpecific::Wayland(
+                                //         wayland::Event::Popup(
+                                //             PopupEvent::Unfocused,
+                                //             surface,
+                                //             id.inner(),
+                                //         ),
+                                //     ),
+                                // ))
+                                None
+                            }
+                            SurfaceIdWrapper::Dnd(_) => None,
+                            SurfaceIdWrapper::SessionLock(_) => {
+                                // Some(iced_runtime::core::Event::PlatformSpecific(
+                                //     PlatformSpecific::Wayland(
+                                //         wayland::Event::SessionLock(
+                                //             SessionLockEvent::Unfocused(
+                                //                 surface,
+                                //                 id.inner(),
+                                //             ),
+                                //         ),
+                                //     ),
+                                // ))
+                                None
+                            }
+                        })
+                        .into_iter()
+                        // .chain([iced_runtime::core::Event::PlatformSpecific(
+                        //     PlatformSpecific::Wayland(wayland::Event::Seat(
+                        //         wayland::SeatEvent::Leave,
+                        //         seat_id,
+                        //     )),
+                        // )])
+                        .collect(),
+                    KeyboardEventVariant::Enter(surface) => surface_ids
+                        .get(&surface.id())
+                        .and_then(|id| match id {
+                            SurfaceIdWrapper::LayerSurface(_id) => {
+                                // Some(iced_runtime::core::Event::PlatformSpecific(
+                                //     PlatformSpecific::Wayland(
+                                //         wayland::Event::Layer(
+                                //             LayerEvent::Focused,
+                                //             surface,
+                                //             id.inner(),
+                                //         ),
+                                //     ),
+                                // ))
+                                None
+                            }
+                            SurfaceIdWrapper::Window(id) => Some(
+                                iced_runtime::core::Event::Window(*id, window::Event::Focused),
+                            ),
+                            SurfaceIdWrapper::Popup(_id) => {
+                                // Some(iced_runtime::core::Event::PlatformSpecific(
+                                //     PlatformSpecific::Wayland(
+                                //         wayland::Event::Popup(
+                                //             PopupEvent::Focused,
+                                //             surface,
+                                //             id.inner(),
+                                //         ),
+                                //     ),
+                                // ))
+                                None
+                            }
+                            SurfaceIdWrapper::Dnd(_) => None,
+                            SurfaceIdWrapper::SessionLock(_) => {
+                                // Some(iced_runtime::core::Event::PlatformSpecific(
+                                //     PlatformSpecific::Wayland(
+                                //         wayland::Event::SessionLock(
+                                //             SessionLockEvent::Focused(
+                                //                 surface,
+                                //                 id.inner(),
+                                //             ),
+                                //         ),
+                                //     ),
+                                // ))
+                                None
+                            }
+                        })
+                        .into_iter()
+                        // .chain([iced_runtime::core::Event::PlatformSpecific(
+                        //     PlatformSpecific::Wayland(wayland::Event::Seat(
+                        //         wayland::SeatEvent::Enter,
+                        //         seat_id,
+                        //     )),
+                        // )])
+                        .collect(),
+                    KeyboardEventVariant::Press(ke) => {
+                        let (key, location) = keysym_to_vkey_location(ke.keysym);
+                        Some(iced_runtime::core::Event::Keyboard(
+                            keyboard::Event::KeyPressed {
+                                key: key,
+                                location: location,
+                                text: ke.utf8.map(|s| s.into()),
+                                modifiers: modifiers_to_native(*modifiers),
+                            },
+                        ))
+                        .into_iter()
+                        .collect()
+                    }
+                    KeyboardEventVariant::Repeat(KeyEvent { keysym, utf8, .. }) => {
+                        let (key, location) = keysym_to_vkey_location(keysym);
+                        Some(iced_runtime::core::Event::Keyboard(
+                            keyboard::Event::KeyPressed {
+                                key: key,
+                                location: location,
+                                text: utf8.map(|s| s.into()),
+                                modifiers: modifiers_to_native(*modifiers),
+                            },
+                        ))
+                        .into_iter()
+                        .collect()
+                    }
+                    KeyboardEventVariant::Release(ke) => {
+                        let (k, location) = keysym_to_vkey_location(ke.keysym);
+                        Some(iced_runtime::core::Event::Keyboard(
+                            keyboard::Event::KeyReleased {
+                                key: k,
+                                location: location,
+                                modifiers: modifiers_to_native(*modifiers),
+                            },
+                        ))
+                        .into_iter()
+                        .collect()
+                    }
+                    KeyboardEventVariant::Modifiers(new_mods) => {
+                        *modifiers = new_mods;
+                        vec![iced_runtime::core::Event::Keyboard(
+                            keyboard::Event::ModifiersChanged(modifiers_to_native(new_mods)),
+                        )]
+                    }
                 }
-                KeyboardEventVariant::Repeat(KeyEvent {
-                    keysym, utf8, ..
-                }) => {
-                    let (key, location) = keysym_to_vkey_location(keysym);
-                    Some(iced_runtime::core::Event::Keyboard(
-                        keyboard::Event::KeyPressed {
-                            key: key,
-                            location: location,
-                            text: utf8.map(|s| s.into()),
-                            modifiers: modifiers_to_native(*modifiers),
-                        },
-                    ))
-                    .into_iter()
-                    .collect()
-                }
-                KeyboardEventVariant::Release(ke) => {
-                    let (k, location) = keysym_to_vkey_location(ke.keysym);
-                    Some(iced_runtime::core::Event::Keyboard(
-                        keyboard::Event::KeyReleased {
-                            key: k,
-                            location: location,
-                            modifiers: modifiers_to_native(*modifiers),
-                        },
-                    ))
-                    .into_iter()
-                    .collect()
-                }
-                KeyboardEventVariant::Modifiers(new_mods) => {
-                    *modifiers = new_mods;
-                    vec![iced_runtime::core::Event::Keyboard(
-                        keyboard::Event::ModifiersChanged(modifiers_to_native(
-                            new_mods,
-                        )),
-                    )]
-                }
-            },
+            }
             SctkEvent::TouchEvent {
                 variant,
                 touch_id: _,
@@ -651,92 +628,93 @@ impl SctkEvent {
                 WindowEventVariant::Created(..) => Default::default(),
                 WindowEventVariant::Close => destroyed_surface_ids
                     .get(&surface.id())
-                    .map(|id| {
-                        iced_runtime::core::Event::Window(
-                            id.inner(),
-                            window::Event::Closed,
-                        )
-                    })
+                    .map(|id| iced_runtime::core::Event::Window(id.inner(), window::Event::Closed))
                     .into_iter()
                     .collect(),
-                WindowEventVariant::WmCapabilities(caps) => 
-                    Default::default(),
-                    // surface_ids
-                    // .get(&surface.id())
-                    // .map(|id| id.inner())
-                    // .map(|id| {
-                    //     iced_runtime::core::Event::PlatformSpecific(
-                    //         PlatformSpecific::Wayland(wayland::Event::Window(
-                    //             wayland::WindowEvent::WmCapabilities(caps),
-                    //             surface,
-                    //             id,
-                    //         )),
-                    //     )
-                    // })
-                    // .into_iter()
-                    // .collect(),
-                WindowEventVariant::ConfigureBounds { .. } => {
-                    Default::default()
-                }
-                WindowEventVariant::Configure(configure, surface, _) => {
-                    if let (Some(new_width), Some(new_height)) =
-                        configure.new_size
-                    {
-                        surface_ids
-                            .get(&surface.id())
-                            .map(|id| {
-                                iced_runtime::core::Event::Window(
+                WindowEventVariant::WmCapabilities(caps) => Default::default(),
+                // surface_ids
+                // .get(&surface.id())
+                // .map(|id| id.inner())
+                // .map(|id| {
+                //     iced_runtime::core::Event::PlatformSpecific(
+                //         PlatformSpecific::Wayland(wayland::Event::Window(
+                //             wayland::WindowEvent::WmCapabilities(caps),
+                //             surface,
+                //             id,
+                //         )),
+                //     )
+                // })
+                // .into_iter()
+                // .collect(),
+                WindowEventVariant::ConfigureBounds { .. } => Default::default(),
+                WindowEventVariant::Configure((new_width, new_height), configure, surface, _) => {
+                    surface_ids
+                        .get(&surface.id())
+                        .map(|id| {
+                            if configure.is_resizing() {
+                                vec![iced_runtime::core::Event::Window(
                                     id.inner(),
                                     window::Event::Resized {
                                         width: new_width.get(),
                                         height: new_height.get(),
                                     },
-                                )
-                            })
-                            .into_iter()
-                            .collect()
-                    } else {
-                        Default::default()
-                    }
+                                )]
+                            } else {
+                                vec![
+                                    iced_runtime::core::Event::Window(
+                                        id.inner(),
+                                        window::Event::Resized {
+                                            width: new_width.get(),
+                                            height: new_height.get(),
+                                        },
+                                    ),
+                                    // iced_runtime::core::Event::PlatformSpecific(
+                                    //     PlatformSpecific::Wayland(wayland::Event::Window(
+                                    //         wayland::WindowEvent::Configure(configure),
+                                    //         surface,
+                                    //         id.inner(),
+                                    //     )),
+                                    // ),
+                                ]
+                            }
+                        })
+                        .unwrap_or_default()
                 }
-                WindowEventVariant::ScaleFactorChanged(..) => {
-                    Default::default()
-                }
-                WindowEventVariant::StateChanged(s) => 
-                    Default::default(),
-                    // surface_ids
-                    // .get(&surface.id())
-                    // .map(|id| {
-                    //     iced_runtime::core::Event::PlatformSpecific(
-                    //         PlatformSpecific::Wayland(wayland::Event::Window(
-                    //             wayland::WindowEvent::State(s),
-                    //             surface,
-                    //             id.inner(),
-                    //         )),
-                    //     )
-                    // })
-                    // .into_iter()
-                    // .collect(),
+                WindowEventVariant::ScaleFactorChanged(..) => Default::default(),
+                WindowEventVariant::StateChanged(s) => Default::default(),
+                // surface_ids
+                // .get(&surface.id())
+                // .map(|id| {
+                //     iced_runtime::core::Event::PlatformSpecific(
+                //         PlatformSpecific::Wayland(wayland::Event::Window(
+                //             wayland::WindowEvent::State(s),
+                //             surface,
+                //             id.inner(),
+                //         )),
+                //     )
+                // })
+                // .into_iter()
+                // .collect(),
+                WindowEventVariant::Size(_, _, _) => vec![],
             },
             SctkEvent::LayerSurfaceEvent {
                 variant,
                 id: surface,
             } => match variant {
-                LayerSurfaceEventVariant::Done => 
-                    Default::default(),
-                    // destroyed_surface_ids
-                    // .get(&surface.id())
-                    // .map(|id| {
-                    //     iced_runtime::core::Event::PlatformSpecific(
-                    //         PlatformSpecific::Wayland(wayland::Event::Layer(
-                    //             LayerEvent::Done,
-                    //             surface,
-                    //             id.inner(),
-                    //         )),
-                    //     )
-                    // })
-                    // .into_iter()
-                    // .collect(),
+                LayerSurfaceEventVariant::Done => Default::default(),
+                // destroyed_surface_ids
+                // .get(&surface.id())
+                // .map(|id| {
+                //     iced_runtime::core::Event::PlatformSpecific(
+                //         PlatformSpecific::Wayland(wayland::Event::Layer(
+                //             LayerEvent::Done,
+                //             surface,
+                //             id.inner(),
+                //         )),
+                //     )
+                // })
+                // .into_iter()
+                // .collect(),
                 _ => Default::default(),
             },
             SctkEvent::PopupEvent {
@@ -745,32 +723,27 @@ impl SctkEvent {
                 ..
             } => {
                 match variant {
-                    PopupEventVariant::Done => 
-                        Default::default(),
-                        // destroyed_surface_ids
-                        // .get(&surface.id())
-                        // .map(|id| {
-                        //     iced_runtime::core::Event::PlatformSpecific(
-                        //         PlatformSpecific::Wayland(
-                        //             wayland::Event::Popup(
-                        //                 PopupEvent::Done,
-                        //                 surface,
-                        //                 id.inner(),
-                        //             ),
-                        //         ),
-                        //     )
-                        // })
-                        // .into_iter()
-                        // .collect(),
+                    PopupEventVariant::Done => Default::default(),
+                    // destroyed_surface_ids
+                    // .get(&surface.id())
+                    // .map(|id| {
+                    //     iced_runtime::core::Event::PlatformSpecific(
+                    //         PlatformSpecific::Wayland(
+                    //             wayland::Event::Popup(
+                    //                 PopupEvent::Done,
+                    //                 surface,
+                    //                 id.inner(),
+                    //             ),
+                    //         ),
+                    //     )
+                    // })
+                    // .into_iter()
+                    // .collect(),
                     PopupEventVariant::Created(_, _) => Default::default(), // TODO
                     PopupEventVariant::Configure(_, _, _) => Default::default(), // TODO
-                    PopupEventVariant::RepositionionedPopup { token: _ } => {
-                        Default::default()
-                    }
+                    PopupEventVariant::RepositionionedPopup { token: _ } => Default::default(),
                     PopupEventVariant::Size(_, _) => Default::default(),
-                    PopupEventVariant::ScaleFactorChanged(..) => {
-                        Default::default()
-                    } // TODO
+                    PopupEventVariant::ScaleFactorChanged(..) => Default::default(), // TODO
                 }
             }
             SctkEvent::NewOutput { id, info } => {
@@ -821,13 +794,12 @@ impl SctkEvent {
                     Default::default()
                 }
                 DndOfferEvent::Motion { x, y } => {
-                    let offset = if let Some((x_offset, y_offset, _)) =
-                        subsurface_ids.get(&surface.id())
-                    {
-                        (*x_offset, *y_offset)
-                    } else {
-                        (0, 0)
-                    };
+                    let offset =
+                        if let Some((x_offset, y_offset, _)) = subsurface_ids.get(&surface.id()) {
+                            (*x_offset, *y_offset)
+                        } else {
+                            (0, 0)
+                        };
                     // Some(iced_runtime::core::Event::PlatformSpecific(
                     //     PlatformSpecific::Wayland(wayland::Event::DndOffer(
                     //         wayland::DndOfferEvent::Motion {
