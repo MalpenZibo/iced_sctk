@@ -476,7 +476,8 @@ where
                     | SctkEvent::WindowEvent {
                         variant: WindowEventVariant::ScaleFactorChanged(..),
                         ..
-                    } => true,
+                    }
+                    | SctkEvent::SessionLockSurfaceScaleFactorChanged { .. } => true,
                     // ignore other events that shouldn't be in this buffer
                     event => {
                         tracing::warn!("Unhandled compositor event: {:?}", event);

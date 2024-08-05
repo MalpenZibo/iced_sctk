@@ -549,7 +549,8 @@ where
                             _,
                             wl_surface,
                             first,
-                        ) | crate::sctk_event::WindowEventVariant::Size(
+                        )
+                        | crate::sctk_event::WindowEventVariant::Size(
                             current_size,
                             wl_surface,
                             first,
@@ -558,7 +559,10 @@ where
                                 let Some(state) = states.get_mut(&id.inner()) else {
                                     continue;
                                 };
-                                let (w, h) = auto_size_surfaces.get(id).map_or_else(|| (current_size.0.get(), current_size.1.get()), |(w, h, _, _)| (*w, *h));
+                                let (w, h) = auto_size_surfaces.get(id).map_or_else(
+                                    || (current_size.0.get(), current_size.1.get()),
+                                    |(w, h, _, _)| (*w, *h),
+                                );
                                 if state.surface.is_none() {
                                     let wrapper = SurfaceDisplayWrapper {
                                         backend: backend.clone(),
@@ -572,7 +576,8 @@ where
                                             simple_clipboard = unsafe { Clipboard::connect(&h) };
                                         }
                                     }
-                                    let mut c_surface = compositor.create_surface(wrapper.clone(), w, h);
+                                    let mut c_surface =
+                                        compositor.create_surface(wrapper.clone(), w, h);
                                     compositor.configure_surface(&mut c_surface, w, h);
                                     state.surface = Some(c_surface);
                                 }
@@ -880,6 +885,19 @@ where
                             interfaces.remove(&surface_id.inner());
                             states.remove(&surface_id.inner());
                             destroyed_surface_ids.insert(surface.id(), surface_id);
+                        }
+                    }
+                    SctkEvent::SessionLockSurfaceScaleFactorChanged {
+                        surface,
+                        scale_factor,
+                        viewport,
+                    } => {
+                        if let Some(state) = surface_ids
+                            .get(&surface.id())
+                            .and_then(|id| states.get_mut(&id.inner()))
+                        {
+                            state.wp_viewport = viewport;
+                            state.set_scale_factor(scale_factor);
                         }
                     }
                     _ => {}
@@ -1439,8 +1457,7 @@ where
 
                     debug.draw_finished();
                     // Set cursor if mouse interaction has changed, and surface has pointer focus
-                    if state.cursor_position.is_some()
-                        && new_mouse_interaction != mouse_interaction
+                    if state.cursor_position.is_some() && new_mouse_interaction != mouse_interaction
                     {
                         mouse_interaction = new_mouse_interaction;
                         ev_proxy.send_event(Event::SetCursor(mouse_interaction));
@@ -2379,6 +2396,9 @@ where
         SctkEvent::SessionLockSurfaceCreated { surface, .. } => &surface.id() == object_id,
         SctkEvent::SessionLockSurfaceConfigure { surface, .. } => &surface.id() == object_id,
         SctkEvent::SessionLockSurfaceDone { surface } => &surface.id() == object_id,
+        SctkEvent::SessionLockSurfaceScaleFactorChanged { surface, .. } => {
+            &surface.id() == object_id
+        }
         SctkEvent::SessionUnlocked => false,
     }
 }

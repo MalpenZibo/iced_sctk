@@ -228,6 +228,9 @@ pub struct SctkLockSurface {
     pub(crate) id: window::Id,
     pub(crate) session_lock_surface: SessionLockSurface,
     pub(crate) last_configure: Option<SessionLockSurfaceConfigure>,
+    pub(crate) scale_factor: Option<f64>,
+    pub(crate) wp_fractional_scale: Option<WpFractionalScaleV1>,
+    pub(crate) wp_viewport: Option<WpViewport>,
 }
 
 pub struct Dnd<T> {
@@ -441,6 +444,26 @@ impl<T> SctkState<T> {
             });
         }
 
+        if let Some(l) = self
+            .lock_surfaces
+            .iter_mut()
+            .find(|l| l.session_lock_surface.wl_surface() == surface)
+        {
+            if legacy && self.fractional_scaling_manager.is_some() {
+                return;
+            }
+            l.scale_factor = Some(scale_factor);
+            let wl_surface = l.session_lock_surface.wl_surface();
+            if legacy {
+                let _ = wl_surface.set_buffer_scale(scale_factor as i32);
+            }
+            self.compositor_updates
+                .push(SctkEvent::SessionLockSurfaceScaleFactorChanged {
+                    surface: wl_surface.clone(),
+                    scale_factor,
+                    viewport: l.wp_viewport.clone(),
+                });
+        }
         // TODO winit sets cursor size after handling the change for the window, so maybe that should be done as well.
     }
 }
@@ -698,10 +721,8 @@ where
             .as_ref()
             .map(|fsm| fsm.fractional_scaling(window.wl_surface(), &self.queue_handle));
 
-        let w = NonZeroU32::new(size.0 as u32)
-            .unwrap_or_else(|| NonZeroU32::new(1).unwrap());
-        let h = NonZeroU32::new(size.1 as u32)
-            .unwrap_or_else(|| NonZeroU32::new(1).unwrap());
+        let w = NonZeroU32::new(size.0 as u32).unwrap_or_else(|| NonZeroU32::new(1).unwrap());
+        let h = NonZeroU32::new(size.1 as u32).unwrap_or_else(|| NonZeroU32::new(1).unwrap());
         self.windows.push(SctkWindow {
             id: window_id,
             window,
@@ -806,10 +827,19 @@ where
             let wl_surface = self.compositor_state.create_surface(&self.queue_handle);
             let session_lock_surface =
                 lock.create_lock_surface(wl_surface.clone(), output, &self.queue_handle);
+            let wp_viewport = self.viewporter_state.as_ref().map(|state| {
+                state.get_viewport(session_lock_surface.wl_surface(), &self.queue_handle)
+            });
+            let wp_fractional_scale = self.fractional_scaling_manager.as_ref().map(|fsm| {
+                fsm.fractional_scaling(session_lock_surface.wl_surface(), &self.queue_handle)
+            });
             self.lock_surfaces.push(SctkLockSurface {
                 id,
                 session_lock_surface,
                 last_configure: None,
+                wp_viewport,
+                wp_fractional_scale,
+                scale_factor: None,
             });
             Some(wl_surface)
         } else {

@@ -18,4 +18,4 @@ I recommend using the original `pop_os` fork or following other projects with th
 such as https://github.com/waycrate/exwlshelleventloop.
 
 
-Iced Pop-os reference commit cb315f66b8f1372d6b96c0e99abb8d2f79063a4e
+Iced Pop-os reference commit e31e29e99ecf56e446258287d235237e026e1f96
