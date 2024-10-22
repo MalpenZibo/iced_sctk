@@ -69,7 +69,6 @@ use std::{
 };
 use wayland_backend::client::ObjectId;
 use wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport;
-use window_clipboard::mime::ClipboardStoreData;
 
 use crate::subsurface_widget::{SubsurfaceInstance, SubsurfaceState};
 

@@ -28,7 +28,7 @@ futures = "0.3.30"
 float-cmp = "0.9.0"
 itertools = "0.13.0"
 raw-window-handle = "0.6"
-window_clipboard = { git = "https://github.com/pop-os/window_clipboard.git", tag = "pop-dnd-6" }
+window_clipboard = "0.4"
 xkeysym = "0.2.1"
 xkbcommon = { version = "0.7.0", features = ["wayland"] } 
 xkbcommon-dl = "0.4.1"
